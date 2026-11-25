@@ -3,7 +3,7 @@
 // tray/src/tray.cpp. Two ways round:
 //   npm start        the host starts the tray program; it exits by itself when the host does.
 //   tray launcher    (installed copies: Start menu, sign-in) the tray program started the host, with
-//                    COCKPIT_LINK_TRAY_PARENT=1, and talks to it over the host's stdin/stdout. When the
+//                    COCKPITCAST_TRAY_PARENT=1, and talks to it over the host's stdin/stdout. When the
 //                    tray goes away (stdin closes), the host stops too.
 
 import { EventEmitter } from 'node:events';
@@ -31,7 +31,7 @@ export class Tray extends EventEmitter {
 
   /// Started by the tray launcher? Then the tray is on our stdin/stdout.
   static get parented() {
-    return process.env.COCKPIT_LINK_TRAY_PARENT === '1';
+    return process.env.COCKPITCAST_TRAY_PARENT === '1';
   }
 
   start() {

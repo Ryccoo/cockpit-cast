@@ -1,11 +1,11 @@
-// Cockpit Link client protocol (version 1). Spec: docs/protocol.md.
+// CockpitCast client protocol (version 1). Spec: docs/protocol.md.
 
 import 'dart:convert';
 import 'dart:typed_data';
 
 const int protocolVersion = 1;
 const int defaultPort = 8800;
-const String mdnsService = '_cockpit-link._tcp';
+const String mdnsService = '_cockpitcast._tcp';
 
 /// One frame as received from the host.
 class Frame {

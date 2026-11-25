@@ -1,6 +1,6 @@
-# Cockpit Link
+# CockpitCast
 
-**Put your sim's cockpit displays on real screens.** Cockpit Link streams the glass displays of
+**Put your sim's cockpit displays on real screens.** CockpitCast streams the glass displays of
 Microsoft Flight Simulator 2024 (for example the G1000 PFD and MFD) from the sim PC to small monitors
 driven by another device on your network: a mini PC or a Raspberry Pi. For aircraft
 with classic round dials it draws the steam gauges itself, from live sim data.
@@ -17,12 +17,12 @@ with classic round dials it draws the steam gauges itself, from live sim data.
 > Cessna 172 G1000 (glass) and Cessna 152 (steam). Other aircraft's displays are learned when
 > you fly them ([Other aircraft](#other-aircraft-and-displays)). MSFS 2020 and DirectX 11 are not supported.
 
-## Support Cockpit Link
+## Support CockpitCast
 
-Cockpit Link is free and open source, made in spare time. If it makes your cockpit better, you can buy
+CockpitCast is free and open source, made in spare time. If it makes your cockpit better, you can buy
 me a coffee on Ko-fi. It helps keep it working after every sim update.
 
-[![Support Cockpit Link on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/richardludvigh)
+[![Support CockpitCast on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/richardludvigh)
 
 ## Screenshots
 
@@ -88,15 +88,15 @@ Android and iOS apps are planned for later (app stores).
 
 ## Install (Windows)
 
-Download from [cockpitlink.ludvigh.dev](https://cockpitlink.ludvigh.dev) or the [Releases page](https://github.com/Ryccoo/cockpit-link/releases/latest):
+Download from [cockpitcast.ludvigh.dev](https://cockpitcast.ludvigh.dev) or the [Releases page](https://github.com/Ryccoo/cockpit-cast/releases/latest):
 
-- **Sim PC:** `CockpitLink-Host-<version>-Setup.exe`. It installs the host for your Windows user (no admin
+- **Sim PC:** `CockpitCast-Host-<version>-Setup.exe`. It installs the host for your Windows user (no admin
   rights needed), with its own copy of Node.js, so there is nothing else to install. Close MSFS first:
   setup also builds and installs the Community hook from your sim's own files. Then start
-  **Cockpit Link** from the Start menu. It runs as a tray icon, with no console window. Ticking
+  **CockpitCast** from the Start menu. It runs as a tray icon, with no console window. Ticking
   "Start when I sign in" during setup starts it with Windows.
-- **Display PCs:** `CockpitLink-Client-<version>-Setup.exe`, or the portable
-  `CockpitLink-Client-<version>-windows.zip` (unzip anywhere and run `cockpit_link.exe`). Both include
+- **Display PCs:** `CockpitCast-Client-<version>-Setup.exe`, or the portable
+  `CockpitCast-Client-<version>-windows.zip` (unzip anywhere and run `cockpitcast.exe`). Both include
   the Visual C++ runtime. For Linux and macOS, see [Client app](#client-app).
 
 After every MSFS update, run **Repair Community hook** from the Start menu (sim closed): the hook
@@ -110,14 +110,14 @@ Installed copies update themselves; there is no need to download a new installer
 - **Sim PC.** The host checks GitHub for a new release a minute after it starts and twice a day. When
   there is one, the tray icon shows a notification and its menu has **Install update**. The editor and
   monitor also show a banner. One click downloads the new installer, checks it against the release's
-  checksums, installs it silently and starts Cockpit Link again. Your layouts, screens and learned
+  checksums, installs it silently and starts CockpitCast again. Your layouts, screens and learned
   displays are kept.
 - **Display PCs** (Windows client installed with the Setup program) update with the sim PC: the same
   click tells them to update too. They also update when the app starts (*Settings > Updates >
   Update automatically*, on by default), and *Update now* is there for a manual update. Linux, macOS
   and the portable zip show that a new version exists, with a download link.
 - The only thing sent is a request for the latest release from GitHub's API. To turn the host's check
-  off, set `"updates": false` in `host/config.json` (or `COCKPIT_LINK_UPDATES=0`). Copies built from
+  off, set `"updates": false` in `host/config.json` (or `COCKPITCAST_UPDATES=0`). Copies built from
   source show that a new release exists but do not install it.
 
 To build from source instead, follow the quick start below.
@@ -218,7 +218,7 @@ flutter build windows
 ```
 
 Output: `build\windows\x64\runner\Release\` (about 28 MB). Copy the **whole folder** to the display PC and
-run `cockpit_link.exe`: the .exe needs the DLLs and the `data` folder next to it. Nothing is installed.
+run `cockpitcast.exe`: the .exe needs the DLLs and the `data` folder next to it. Nothing is installed.
 
 The display PC needs the Microsoft Visual C++ runtime, which most Windows PCs already have. If the app
 complains about a missing `MSVCP140.dll` or `VCRUNTIME140.dll`, install the *Microsoft Visual C++
@@ -234,11 +234,11 @@ sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev lib
 flutter build linux
 ```
 
-Output: `build/linux/x64/release/bundle/` (`arm64` on a Pi). Run `cockpit_link` from that folder.
+Output: `build/linux/x64/release/bundle/` (`arm64` on a Pi). Run `cockpitcast` from that folder.
 
 - Host discovery uses mDNS and shares port 5353 with `avahi-daemon` if it is running.
 - For a kiosk box: set the desktop to log in automatically and turn off screen blanking. Then turn on
-  *Start when I sign in* in the app, which writes `~/.config/autostart/cockpit-link.desktop`.
+  *Start when I sign in* in the app, which writes `~/.config/autostart/cockpitcast.desktop`.
 
 ### macOS
 
@@ -248,7 +248,7 @@ Output: `build/linux/x64/release/bundle/` (`arm64` on a Pi). Run `cockpit_link` 
 flutter build macos
 ```
 
-Output: `build/macos/Build/Products/Release/cockpit_link.app`. The app is not sandboxed, because it
+Output: `build/macos/Build/Products/Release/cockpitcast.app`. The app is not sandboxed, because it
 starts extra copies of itself for extra windows and writes a LaunchAgent for start at sign-in. It is not
 signed: on first start, right-click it and choose Open.
 
@@ -258,9 +258,9 @@ Everything can be set on the Settings page. Flags override the saved settings fo
 which is useful for scripts and kiosks:
 
 ```
-cockpit_link --screen 1                      follow the host's screen 1 (finds the host by itself)
-cockpit_link --displays pfd,mfd              show these glass displays side by side
-cockpit_link --layout six-pack               show this gauge layout
+cockpitcast --screen 1                      follow the host's screen 1 (finds the host by itself)
+cockpitcast --displays pfd,mfd              show these glass displays side by side
+cockpitcast --layout six-pack               show this gauge layout
   --host 192.168.1.50  --port 8800           host address (default: find it on the network)
   --monitor 2  --fullscreen | --windowed     which monitor (number as listed in Settings)
   --split auto|row|column  --fps 30          layout of several displays, frame rate limit
@@ -298,9 +298,9 @@ aircraft profiles in `host/defaults/aircraft.json` and are estimated when an air
 
 ## Other aircraft and displays
 
-Cockpit Link learns glass displays by itself. Whenever you load an aircraft, the hook tells the host which
+CockpitCast learns glass displays by itself. Whenever you load an aircraft, the hook tells the host which
 instruments the sim draws, and every instrument becomes a display (PFDs and MFDs, but also radios, hour meters and the like). The host
-remembers them on your computer (`%LOCALAPPDATA%\CockpitLink\displays.json`), so the list grows as you
+remembers them on your computer (`%LOCALAPPDATA%\CockpitCast\displays.json`), so the list grows as you
 fly more aircraft. Nothing needs rebuilding, and nobody has to collect aircraft data in advance.
 
 - **Primary displays.** PFDs, MFDs, EICAS and the like are guessed from their names. They make a cockpit
@@ -318,7 +318,7 @@ own pair of marker colours, which is how capture.dll tells their textures apart.
 16 displays at a time; the host sends it only those in the loaded cockpit or being watched.
 
 Only instruments the sim draws as their own HTML/JS gauge texture can be captured. Steam gauges are 3D
-model parts; Cockpit Link draws those itself.
+model parts; CockpitCast draws those itself.
 
 ## Host settings
 
@@ -336,8 +336,8 @@ keys. For example:
 | `http://localhost:8800/api/status` | Full state as JSON (sim PC only) |
 | `POST /api/inject` | Inject capture.dll now (when `autoInject` is off) |
 
-- **Logs:** `%LOCALAPPDATA%\CockpitLink\logs\` (`host.log`, `capture.log`, `update-install.log`).
-- **Saved layouts and screens:** `%LOCALAPPDATA%\CockpitLink\`.
+- **Logs:** `%LOCALAPPDATA%\CockpitCast\logs\` (`host.log`, `capture.log`, `update-install.log`).
+- **Saved layouts and screens:** `%LOCALAPPDATA%\CockpitCast\`.
 
 ## Troubleshooting
 
@@ -355,9 +355,9 @@ keys. For example:
 | Folder | What |
 |---|---|
 | `capture/` | capture.dll (C++), plus `panel-sim.exe`, a D3D12 stand-in for the sim, for testing |
-| `injector/` | `cockpit-link-injector.exe` (C++), plus a fake sim and a test DLL |
-| `tray/` | `cockpit-link-tray.exe` (C++): the tray icon. `npm start` starts it; installed copies start the host from it (launcher, no console window) |
-| `site/` | The landing page (cockpitlink.ludvigh.dev), published by `.github/workflows/pages.yml` |
+| `injector/` | `cockpitcast-injector.exe` (C++), plus a fake sim and a test DLL |
+| `tray/` | `cockpitcast-tray.exe` (C++): the tray icon. `npm start` starts it; installed copies start the host from it (launcher, no console window) |
+| `site/` | The landing page (cockpitcast.ludvigh.dev), published by `.github/workflows/pages.yml` |
 | `.github/workflows/` | `release.yml` (builds installers and clients on a version tag), `pages.yml` (website), `cla.yml` (CLA bot) |
 | `installer/` | Inno Setup scripts and `build.ps1`: builds the host and client installers and the portable client zip |
 | `hook/` | Community hook source; build and install scripts |
@@ -373,7 +373,7 @@ keys. For example:
   exits.
 - Injecting code into a program is your own choice and at your own risk. Use it in single-player MSFS
   only.
-- If the sim updates its rendering, capture may stop working until Cockpit Link is updated. The sim itself
+- If the sim updates its rendering, capture may stop working until CockpitCast is updated. The sim itself
   keeps running.
 
 ## Contributing
@@ -384,20 +384,20 @@ notes for specific devices.
 
 Before your first pull request is merged, a bot asks you to sign the [Contributor License Agreement](CLA.md)
 (one comment on the pull request). You keep the copyright in your work. The CLA lets the project also offer
-Cockpit Link under a commercial licence (see below), and it promises that your contribution stays
+CockpitCast under a commercial licence (see below), and it promises that your contribution stays
 available under the GPL.
 
 ## License
 
-Cockpit Link is free software under the **GNU General Public License v3.0** (GPL-3.0): you may use,
+CockpitCast is free software under the **GNU General Public License v3.0** (GPL-3.0): you may use,
 study, share and change it, and anything you distribute that is based on it must be released under the
 same licence, with its source code. See [LICENSE](LICENSE).
 
-**Commercial licence.** Want to build Cockpit Link into a product that cannot be released under the GPL
+**Commercial licence.** Want to build CockpitCast into a product that cannot be released under the GPL
 (for example a commercial cockpit or simulator)? It is also available under a commercial licence. Open
 an issue titled "Commercial licence" to get in touch.
 
-**Name.** "Cockpit Link" identifies this project. Forks are welcome under the GPL, but please give them a
+**Name.** "CockpitCast" identifies this project. Forks are welcome under the GPL, but please give them a
 different name so users can tell them apart from the official releases.
 
 Third-party packages keep their own licences:

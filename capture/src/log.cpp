@@ -35,7 +35,7 @@ void LogInit() {
     char base[MAX_PATH];
     std::string dir;
     if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, base)))
-        dir = std::string(base) + "\\CockpitLink\\logs";
+        dir = std::string(base) + "\\CockpitCast\\logs";
     else {
         GetTempPathA(MAX_PATH, base);
         dir = base;

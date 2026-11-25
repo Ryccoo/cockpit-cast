@@ -1,9 +1,9 @@
 <#
 Builds the Windows installers (Inno Setup 6) and the portable client zip:
 
-  installer\output\CockpitLink-Host-<version>-Setup.exe     sim PC: host, capture.dll, injector, tray, hook tools
-  installer\output\CockpitLink-Client-<version>-Setup.exe   display PCs: the client app
-  installer\output\CockpitLink-Client-<version>-windows.zip the client without installing (unzip and run)
+  installer\output\CockpitCast-Host-<version>-Setup.exe     sim PC: host, capture.dll, injector, tray, hook tools
+  installer\output\CockpitCast-Client-<version>-Setup.exe   display PCs: the client app
+  installer\output\CockpitCast-Client-<version>-windows.zip the client without installing (unzip and run)
 
 Needs: Visual Studio 2022 (C++, CMake), Node.js, the Flutter SDK, Inno Setup 6.
 
@@ -18,7 +18,7 @@ $here = $PSScriptRoot
 $stage = Join-Path $here 'stage'
 $out = Join-Path $here 'output'
 $version = (Get-Content (Join-Path $root 'host\package.json') -Raw | ConvertFrom-Json).version
-Write-Host "Cockpit Link $version"
+Write-Host "CockpitCast $version"
 
 function Find-Tool($name, $candidates) {
   foreach ($c in $candidates) { if ($c -and (Test-Path $c)) { return $c } }
@@ -65,8 +65,8 @@ if (-not $SkipHost) {
   $h = Join-Path $stage 'host'
   if (Test-Path $h) { Remove-Item -Recurse -Force $h }
   New-Item -ItemType Directory -Force "$h\bin", "$h\node", "$h\host", "$h\config", "$h\hook\src" | Out-Null
-  Copy-Item "$root\tray\build\Release\cockpit-link-tray.exe" "$h\cockpit-link.exe"
-  Copy-Item "$root\capture\build\Release\cockpit-link-capture.dll", "$root\injector\build\Release\cockpit-link-injector.exe" "$h\bin"
+  Copy-Item "$root\tray\build\Release\cockpitcast-tray.exe" "$h\cockpitcast.exe"
+  Copy-Item "$root\capture\build\Release\cockpitcast-capture.dll", "$root\injector\build\Release\cockpitcast-injector.exe" "$h\bin"
   Copy-Item $node "$h\node\node.exe"
   $nodeLicense = Join-Path (Split-Path $node) 'LICENSE'
   if (Test-Path $nodeLicense) { Copy-Item $nodeLicense "$h\node\LICENSE" }
@@ -94,7 +94,7 @@ if (-not $SkipClient) {
   if (Test-Path "$root\LICENSE") { Copy-Item "$root\LICENSE" $c }
   Copy-Item $notices $c
   Run $iscc @("/DAppVersion=$version", '/Qp', "$here\client.iss") $here
-  $zip = Join-Path $out "CockpitLink-Client-$version-windows.zip"
+  $zip = Join-Path $out "CockpitCast-Client-$version-windows.zip"
   if (Test-Path $zip) { Remove-Item $zip }
   Compress-Archive -Path "$c\*" -DestinationPath $zip
 }

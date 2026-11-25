@@ -1,10 +1,10 @@
-// cockpit-link-injector: finds the sim process and loads cockpit-link-capture.dll into it.
+// cockpitcast-injector: finds the sim process and loads cockpitcast-capture.dll into it.
 // Called by the host (host/src/injector.mjs). Prints exactly one JSON line on stdout.
 //
-//   cockpit-link-injector status --exe FlightSimulator2024.exe
+//   cockpitcast-injector status --exe FlightSimulator2024.exe
 //       {"ok":true,"processes":[{"pid":123,"ours":null}]}
-//   cockpit-link-injector inject --pid 123 --dll C:\path\cockpit-link-capture.dll
-//       {"ok":true,"pid":123,"module":"C:\\path\\cockpit-link-capture.dll"}
+//   cockpitcast-injector inject --pid 123 --dll C:\path\cockpitcast-capture.dll
+//       {"ok":true,"pid":123,"module":"C:\\path\\cockpitcast-capture.dll"}
 //       {"ok":true,"pid":123,"already":true,"module":"..."}
 //       {"ok":false,"error":"...","code":5}
 //
@@ -23,7 +23,7 @@
 
 namespace {
 
-const wchar_t* kOurModule = L"cockpit-link-capture.dll";
+const wchar_t* kOurModule = L"cockpitcast-capture.dll";
 
 std::string Utf8(const std::wstring& w) {
     if (w.empty()) return {};
@@ -198,5 +198,5 @@ int wmain(int argc, wchar_t** argv) {
         if (!pid || !dll) return Fail(L"usage: inject --pid <pid> --dll <path>");
         return Inject((DWORD)wcstoul(pid, nullptr, 10), dll);
     }
-    return Fail(L"usage: cockpit-link-injector status --exe <name.exe> | inject --pid <pid> --dll <path>");
+    return Fail(L"usage: cockpitcast-injector status --exe <name.exe> | inject --pid <pid> --dll <path>");
 }

@@ -1,4 +1,4 @@
-# Cockpit Link protocols
+# CockpitCast protocols
 
 Three links, all on the sim PC except the client link:
 
@@ -10,7 +10,7 @@ All integers are little-endian.
 
 ## 1. Capture link: named pipe (version 2)
 
-- Pipe: `\\.\pipe\cockpit-link-capture`. The host is the server; the capture source connects as a client.
+- Pipe: `\\.\pipe\cockpitcast-capture`. The host is the server; the capture source connects as a client.
 - Stream of messages in both directions, each one:
 
 ```
@@ -75,7 +75,7 @@ Rules for a capture source (capture.dll):
 
 ## 2. Client link: WebSocket (version 1)
 
-- The host advertises itself with mDNS/DNS-SD: service type `_cockpit-link._tcp`, TXT `protocol=1`, `name=<host name>`.
+- The host advertises itself with mDNS/DNS-SD: service type `_cockpitcast._tcp`, TXT `protocol=1`, `name=<host name>`.
 - Default port 8800.
 - Endpoint: `ws://<host>:8800/ws`.
 
@@ -154,7 +154,7 @@ Host to client:
 - `dataVars` comes once after `subscribeData`; every `data` message has the values in that order (keys and
   SimConnect names: `host/src/simvars.mjs`). Read-only. The host reads SimConnect every visual frame only
   while some client is subscribed, and sends each client at most `maxHz` (default 30, up to 60).
-- `layouts` is sent on connect and after any change (stored in `%LOCALAPPDATA%\CockpitLink\layouts.json`;
+- `layouts` is sent on connect and after any change (stored in `%LOCALAPPDATA%\CockpitCast\layouts.json`;
   defaults in `host/defaults/layouts.json`). Gauge types: `asi`, `attitude`, `altimeter`, `turn`,
   `heading`, `vsi`, `dial` (generic: `var`, `min`, `max`, `arcs`...), `cdi` (`nav` 1/2), `adf`, `clock`.
 - `screens` is sent on connect and whenever it changes. The host decides per screen (`host/src/screens.mjs`):
@@ -212,9 +212,9 @@ Hook to host:
 - `layout` lists every display on the page that is in the table. It is sent after connecting and whenever it changes; a display missing from it is gone from that page. All values are texture pixels: page CSS pixels times `devicePixelRatio`. `read` is the display's visible top-left corner, where the hook paints the marker; `crop` is the visible size; `texture` is the page size.
 - The host merges the latest layout per display into CONFIG. CONFIG holds only displays in the loaded cockpit or watched by a client, at most 16. When all 16 entries in capture.dll are taken, it reuses an idle entry that is no longer in CONFIG.
 
-## Tray icon: host and cockpit-link-tray.exe (Windows)
+## Tray icon: host and cockpitcast-tray.exe (Windows)
 
-The host starts `tray/build/Release/cockpit-link-tray.exe` and talks to it over the program's stdin and
+The host starts `tray/build/Release/cockpitcast-tray.exe` and talks to it over the program's stdin and
 stdout, one UTF-8 line per message. When the host exits, stdin closes and the tray program exits too.
 
 - Host to tray: `editor <url>`, `monitor <url>` (what the click and the menu open), `support <url>`,
@@ -222,8 +222,8 @@ stdout, one UTF-8 line per message. When the host exits, stdin closes and the tr
   it changes, checked every 2 s), `update <version>` (a newer version can be installed: menu item and a
   notification) and `install <installer path>` (launcher mode: stop the host, run that installer with
   `/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /UPDATE=1 /LOG=...`, exit; the installer
-  starts Cockpit Link again).
-- Tray to host: `quit` (menu *Quit Cockpit Link host*; the host shuts down) and `update` (menu
+  starts CockpitCast again).
+- Tray to host: `quit` (menu *Quit CockpitCast host*; the host shuts down) and `update` (menu
   *Install update*).
 
 ## HTTP

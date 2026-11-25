@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.cockpitlink" "\0"
-            VALUE "FileDescription", "cockpit_link" "\0"
+            VALUE "CompanyName", "dev.cockpitcast" "\0"
+            VALUE "FileDescription", "cockpitcast" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "cockpit_link" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 dev.cockpitlink. All rights reserved." "\0"
-            VALUE "OriginalFilename", "cockpit_link.exe" "\0"
-            VALUE "ProductName", "cockpit_link" "\0"
+            VALUE "InternalName", "cockpitcast" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 dev.cockpitcast. All rights reserved." "\0"
+            VALUE "OriginalFilename", "cockpitcast.exe" "\0"
+            VALUE "ProductName", "cockpitcast" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

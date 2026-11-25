@@ -83,7 +83,7 @@ Future<void> restoreWindow() async {
   if (!isDesktop) return;
   try {
     if (await windowManager.isFullScreen()) await windowManager.setFullScreen(false);
-    await windowManager.setTitle('Cockpit Link');
+    await windowManager.setTitle('CockpitCast');
   } catch (_) {}
 }
 
@@ -132,7 +132,7 @@ class ExtraWindowsCloser with WindowListener {
 
 const _runKey = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
 
-String _valueName(String profile) => profile.isEmpty ? 'CockpitLink' : 'CockpitLink-$profile';
+String _valueName(String profile) => profile.isEmpty ? 'CockpitCast' : 'CockpitCast-$profile';
 
 /// Register (or remove) the app to start when the user signs in.
 Future<String?> setLaunchAtLogin(bool on, {String profile = ''}) async {
@@ -147,15 +147,15 @@ Future<String?> setLaunchAtLogin(bool on, {String profile = ''}) async {
       if (on && r.exitCode != 0) return 'Could not register: ${r.stderr}'.trim();
     } else if (Platform.isLinux) {
       final dir = Directory('${Platform.environment['HOME']}/.config/autostart');
-      final file = File('${dir.path}/cockpit-link${profile.isEmpty ? '' : '-$profile'}.desktop');
+      final file = File('${dir.path}/cockpitcast${profile.isEmpty ? '' : '-$profile'}.desktop');
       if (on) {
         await dir.create(recursive: true);
-        await file.writeAsString('[Desktop Entry]\nType=Application\nName=Cockpit Link\nExec="$exe"$extra\nX-GNOME-Autostart-enabled=true\n');
+        await file.writeAsString('[Desktop Entry]\nType=Application\nName=CockpitCast\nExec="$exe"$extra\nX-GNOME-Autostart-enabled=true\n');
       } else if (await file.exists()) {
         await file.delete();
       }
     } else if (Platform.isMacOS) {
-      final label = 'dev.cockpitlink.client${profile.isEmpty ? '' : '.$profile'}';
+      final label = 'dev.cockpitcast.client${profile.isEmpty ? '' : '.$profile'}';
       final file = File('${Platform.environment['HOME']}/Library/LaunchAgents/$label.plist');
       if (on) {
         await file.parent.create(recursive: true);

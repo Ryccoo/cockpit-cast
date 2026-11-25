@@ -9,7 +9,7 @@ Everything here can run without the sim. See
 |---|---|
 | `host/tools/fake-capture.mjs` (`npm run fake-capture`) | Behaves like capture.dll: connects to the host's pipe and sends moving PFD/MFD test cards (only while a client watches). `--static` sends a still picture |
 | `host/tools/test-client.mjs` | Command-line client: `node tools/test-client.mjs --seconds 5` prints frame rates per display |
-| `injector/build/Release/fake-sim.exe` | A process to inject into, plus a test DLL (`injector/build/test/Release/cockpit-link-capture.dll`) that connects to the host and logs the CONFIG it receives |
+| `injector/build/Release/fake-sim.exe` | A process to inject into, plus a test DLL (`injector/build/test/Release/cockpitcast-capture.dll`) that connects to the host and logs the CONFIG it receives |
 | `capture/build/Release/panel-sim.exe` | D3D12 stand-in for the sim: renders fake PFD/MFD panels with marker pixels, plus decoys. The real capture.dll can be injected into it |
 | `client/tool/discover.dart` | `dart run tool/discover.dart`: lists the hosts found on the network |
 
@@ -17,14 +17,14 @@ Host environment switches for testing:
 
 | Variable | Effect |
 |---|---|
-| `COCKPIT_LINK_FAKE_DATA=1` | Synthetic flight data for the steam gauges (no sim needed) |
-| `COCKPIT_LINK_SCREEN_MODE=steam` / `glass` | Force the screen mode instead of detecting it |
-| `COCKPIT_LINK_SIM_EXE=<exe name>` | Which process the injector waits for (e.g. `panel-sim.exe`) |
-| `COCKPIT_LINK_REQUIRE_FLIGHT=0` | Inject without waiting for a live flight |
-| `COCKPIT_LINK_DLL=<path>` | DLL to inject |
-| `COCKPIT_LINK_AUTO_INJECT=0` | Do not inject by itself (manual: `curl -X POST http://localhost:8800/api/inject`) |
-| `COCKPIT_LINK_TRAY=0` | No tray icon |
-| `COCKPIT_LINK_PORT=<port>` | Host port (default 8800; rebuild the hook if you change it) |
+| `COCKPITCAST_FAKE_DATA=1` | Synthetic flight data for the steam gauges (no sim needed) |
+| `COCKPITCAST_SCREEN_MODE=steam` / `glass` | Force the screen mode instead of detecting it |
+| `COCKPITCAST_SIM_EXE=<exe name>` | Which process the injector waits for (e.g. `panel-sim.exe`) |
+| `COCKPITCAST_REQUIRE_FLIGHT=0` | Inject without waiting for a live flight |
+| `COCKPITCAST_DLL=<path>` | DLL to inject |
+| `COCKPITCAST_AUTO_INJECT=0` | Do not inject by itself (manual: `curl -X POST http://localhost:8800/api/inject`) |
+| `COCKPITCAST_TRAY=0` | No tray icon |
+| `COCKPITCAST_PORT=<port>` | Host port (default 8800; rebuild the hook if you change it) |
 
 ## Recipes
 
@@ -36,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File installer\build.ps1 -SkipBuild # reuse 
 ```
 
 The tray program as launcher, like an installed copy (starts the host with no console window; quit
-from its menu): run `tray\build\Release\cockpit-link-tray.exe` directly instead of `npm start`.
+from its menu): run `tray\build\Release\cockpitcast-tray.exe` directly instead of `npm start`.
 
 Pipeline without the sim (fake frames):
 
@@ -50,9 +50,9 @@ Injection without the sim:
 
 ```
 injector\build\Release\fake-sim.exe
-set COCKPIT_LINK_SIM_EXE=fake-sim.exe
-set COCKPIT_LINK_REQUIRE_FLIGHT=0
-set COCKPIT_LINK_DLL=..\injector\build\test\Release\cockpit-link-capture.dll
+set COCKPITCAST_SIM_EXE=fake-sim.exe
+set COCKPITCAST_REQUIRE_FLIGHT=0
+set COCKPITCAST_DLL=..\injector\build\test\Release\cockpitcast-capture.dll
 cd host && npm start
 ```
 
@@ -60,25 +60,25 @@ Real capture.dll without the sim:
 
 ```
 capture\build\Release\panel-sim.exe
-set COCKPIT_LINK_SIM_EXE=panel-sim.exe
-set COCKPIT_LINK_REQUIRE_FLIGHT=0
+set COCKPITCAST_SIM_EXE=panel-sim.exe
+set COCKPITCAST_REQUIRE_FLIGHT=0
 cd host && npm start          # injects capture.dll into panel-sim; watch pfd/mfd in a client
 ```
 
 Steam gauges without the sim:
 
 ```
-set COCKPIT_LINK_FAKE_DATA=1
-set COCKPIT_LINK_SCREEN_MODE=steam
+set COCKPITCAST_FAKE_DATA=1
+set COCKPITCAST_SCREEN_MODE=steam
 cd host && npm start
 ```
 
 Updates without a real release (a stand-in for GitHub's API that serves the newer installers):
 
 ```
-set COCKPIT_LINK_UPDATE_URL=http://127.0.0.1:8899/latest
-"%LOCALAPPDATA%\Programs\Cockpit Link\cockpit-link.exe"          # host: checks a minute after start
-"%LOCALAPPDATA%\Programs\Cockpit Link Client\cockpit_link.exe"   # client: checks 10 s after start
+set COCKPITCAST_UPDATE_URL=http://127.0.0.1:8899/latest
+"%LOCALAPPDATA%\Programs\CockpitCast\cockpitcast.exe"          # host: checks a minute after start
+"%LOCALAPPDATA%\Programs\CockpitCast Client\cockpitcast.exe"   # client: checks 10 s after start
 ```
 
 The URL must answer like `GET /repos/<owner>/<repo>/releases/latest` (`tag_name`, `html_url`,
@@ -98,11 +98,11 @@ be built with a higher version (host/package.json, client/pubspec.yaml and clien
 
 | What | Where |
 |---|---|
-| Host log | `%LOCALAPPDATA%\CockpitLink\logs\host.log` (previous run: `host.1.log`) |
-| capture.dll log | `%LOCALAPPDATA%\CockpitLink\logs\capture.log` |
-| Update installs | `%LOCALAPPDATA%\CockpitLink\logs\update-install.log` (host), `%LOCALAPPDATA%\CockpitLink\client-update.log` (client) |
+| Host log | `%LOCALAPPDATA%\CockpitCast\logs\host.log` (previous run: `host.1.log`) |
+| capture.dll log | `%LOCALAPPDATA%\CockpitCast\logs\capture.log` |
+| Update installs | `%LOCALAPPDATA%\CockpitCast\logs\update-install.log` (host), `%LOCALAPPDATA%\CockpitCast\client-update.log` (client) |
 | Full host state | `http://localhost:8800/api/status` |
-| Learned displays | `http://localhost:8800/api/displays`, `%LOCALAPPDATA%\CockpitLink\displays.json` |
-| Saved display pictures (editor Insert window) | `%LOCALAPPDATA%\CockpitLink\thumbs\<id>.jpg`, `http://localhost:8800/thumb/<id>.jpg` |
-| Instruments seen per aircraft | `http://localhost:8800/api/instruments`, `%LOCALAPPDATA%\CockpitLink\instruments.json` |
-| Saved layouts and screens | `%LOCALAPPDATA%\CockpitLink\layouts.json`, `screens.json` |
+| Learned displays | `http://localhost:8800/api/displays`, `%LOCALAPPDATA%\CockpitCast\displays.json` |
+| Saved display pictures (editor Insert window) | `%LOCALAPPDATA%\CockpitCast\thumbs\<id>.jpg`, `http://localhost:8800/thumb/<id>.jpg` |
+| Instruments seen per aircraft | `http://localhost:8800/api/instruments`, `%LOCALAPPDATA%\CockpitCast\instruments.json` |
+| Saved layouts and screens | `%LOCALAPPDATA%\CockpitCast\layouts.json`, `screens.json` |

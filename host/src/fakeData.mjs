@@ -1,4 +1,4 @@
-// Synthetic flight data for testing gauges without the sim (COCKPIT_LINK_FAKE_DATA=1).
+// Synthetic flight data for testing gauges without the sim (COCKPITCAST_FAKE_DATA=1).
 // Emits 'data' at 30 Hz while wanted, with values in SIMVARS order: a C172 doing gentle climbing and
 // descending turns, with engine, fuel and radio values that move a little.
 

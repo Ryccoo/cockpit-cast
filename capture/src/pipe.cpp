@@ -12,7 +12,7 @@
 
 namespace {
 
-const wchar_t* kPipeName = L"\\\\.\\pipe\\cockpit-link-capture";
+const wchar_t* kPipeName = L"\\\\.\\pipe\\cockpitcast-capture";
 enum : uint8_t { HELLO = 1, FRAME = 2, LOG = 3, STATS = 4, UNCHANGED = 5, CONFIG = 16, HEARTBEAT = 17, SHUTDOWN = 18 };
 const size_t kMaxQueuedBytes = 6u << 20;  // frames beyond this are dropped
 const uint32_t kMaxMessage = 8u << 20;

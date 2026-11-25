@@ -1,4 +1,4 @@
-// Connection to one Cockpit Link host: WebSocket, subscriptions, frame decoding, reconnect.
+// Connection to one CockpitCast host: WebSocket, subscriptions, frame decoding, reconnect.
 
 import 'dart:async';
 import 'dart:convert';

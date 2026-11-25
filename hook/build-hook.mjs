@@ -5,7 +5,7 @@
 // Without --stock it looks for the sim: every Steam library (any drive), then the MS Store / Xbox app
 // install. MSFS_STOCK_BASEINSTRUMENT may also name the file.
 //
-// Output: hook/dist/zzz-cockpit-link-hook/  (copy into the Community folder with install-hook.mjs)
+// Output: hook/dist/zzz-cockpitcast-hook/  (copy into the Community folder with install-hook.mjs)
 // Re-run after every sim update: the stock file changes with the sim.
 
 import { execFileSync } from 'node:child_process';
@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PKG = 'zzz-cockpit-link-hook';
+const PKG = 'zzz-cockpitcast-hook';
 const REL = 'html_ui/Pages/VCockpit/Instruments/Shared/BaseInstrument.js';
 const IN_PACKAGES = path.join('asobo-vcockpits-instruments', ...REL.split('/'));
 
@@ -63,17 +63,17 @@ if (!stockPath || !fs.existsSync(stockPath)) {
 }
 
 const stock = fs.readFileSync(stockPath, 'utf8');
-if (stock.includes('Cockpit Link hook')) {
-  console.error('That file already contains the Cockpit Link hook; point --stock at the original sim file.');
+if (stock.includes('CockpitCast hook')) {
+  console.error('That file already contains the CockpitCast hook; point --stock at the original sim file.');
   process.exit(1);
 }
 // Fill the hook's display table and host port from the shared config.
 const { displays } = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'config', 'displays.json'), 'utf8'));
 const table = {};
 for (const d of displays) for (const tag of d.tags) table[tag.toLowerCase()] = { id: d.id, px: d.marker };
-const port = Number(process.env.COCKPIT_LINK_PORT) || 8800;
+const port = Number(process.env.COCKPITCAST_PORT) || 8800;
 const version = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'host', 'package.json'), 'utf8')).version;
-let hook = fs.readFileSync(path.join(HERE, 'src', 'cockpit-link-hook.js'), 'utf8');
+let hook = fs.readFileSync(path.join(HERE, 'src', 'cockpitcast-hook.js'), 'utf8');
 for (const [mark, value] of [
   ['/*__DISPLAYS__*/ {}', JSON.stringify(table)],
   ['/*__PORT__*/ 8800', String(port)],
@@ -83,7 +83,7 @@ for (const [mark, value] of [
   hook = hook.replace(mark, value);
 }
 const header =
-  '// Cockpit Link: stock MSFS BaseInstrument.js with the Cockpit Link hook appended at the end.\n' +
+  '// CockpitCast: stock MSFS BaseInstrument.js with the CockpitCast hook appended at the end.\n' +
   `// Built ${new Date().toISOString()} from ${stockPath}\n\n`;
 const out = header + stock.replace(/\s*$/, '\n') + hook;
 
@@ -96,9 +96,9 @@ fs.writeFileSync(target, out);
 const manifest = {
   dependencies: [],
   content_type: 'UNKNOWN',
-  title: 'Cockpit Link Hook',
-  manufacturer: 'Cockpit Link',
-  creator: 'Cockpit Link',
+  title: 'CockpitCast Hook',
+  manufacturer: 'CockpitCast',
+  creator: 'CockpitCast',
   package_version: '0.1.0',
   minimum_game_version: '1.39.12',
   release_notes: { neutral: { LastUpdate: '', OlderHistory: '' } },

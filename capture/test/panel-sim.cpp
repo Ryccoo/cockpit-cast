@@ -7,8 +7,8 @@
 // and presents a small window. Panel textures go PIXEL_SHADER_RESOURCE -> RENDER_TARGET -> back, as
 // in a real renderer.
 //
-// Test: start panel-sim.exe, then the host with COCKPIT_LINK_SIM_EXE=panel-sim.exe and
-// COCKPIT_LINK_REQUIRE_FLIGHT=0, and watch pfd/mfd in a client.
+// Test: start panel-sim.exe, then the host with COCKPITCAST_SIM_EXE=panel-sim.exe and
+// COCKPITCAST_REQUIRE_FLIGHT=0, and watch pfd/mfd in a client.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -75,7 +75,7 @@ int main() {
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.lpszClassName = L"PanelSim";
     RegisterClassExW(&wc);
-    HWND hwnd = CreateWindowExW(0, wc.lpszClassName, L"panel-sim (Cockpit Link test)", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 100, 100, 640, 360, nullptr, nullptr, inst, nullptr);
+    HWND hwnd = CreateWindowExW(0, wc.lpszClassName, L"panel-sim (CockpitCast test)", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 100, 100, 640, 360, nullptr, nullptr, inst, nullptr);
 
     ID3D12Device* dev;
     CHECK(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&dev)));

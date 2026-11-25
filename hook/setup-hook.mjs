@@ -5,7 +5,7 @@
 //
 // --pause waits for Enter at the end (when run in its own console window). --force installs even if
 // another Community package replaces the same sim file. The output also goes to
-// %LOCALAPPDATA%\CockpitLink\logs\hook-setup.log. Exit code 0 when the hook is installed.
+// %LOCALAPPDATA%\CockpitCast\logs\hook-setup.log. Exit code 0 when the hook is installed.
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-const logFile = path.join(process.env.LOCALAPPDATA ?? HERE, 'CockpitLink', 'logs', 'hook-setup.log');
+const logFile = path.join(process.env.LOCALAPPDATA ?? HERE, 'CockpitCast', 'logs', 'hook-setup.log');
 let text = '';
 const say = (s) => {
   text += s + '\n';
@@ -28,7 +28,7 @@ function run(script, extra = []) {
   return r.status === 0;
 }
 
-say('Cockpit Link: setting up the Community hook for MSFS 2024\n');
+say('CockpitCast: setting up the Community hook for MSFS 2024\n');
 const ok = run('build-hook.mjs') && run('install-hook.mjs', args.includes('--force') ? ['--force'] : []);
 say(ok ? '\nDone. Restart MSFS if it is running.' : '\nThe hook is NOT installed (see above).');
 try {

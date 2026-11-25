@@ -11,7 +11,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PKG = 'zzz-cockpit-link-hook';
+const PKG = 'zzz-cockpitcast-hook';
+// The same hook under the project's former name (up to 0.1.1); removed when installing or removing.
+const LEGACY_PKG = 'zzz-cockpit-link-hook';
 const COMMUNITY = process.env.MSFS_COMMUNITY || findCommunity();
 
 // The Community folder sits in the sim's packages folder (InstalledPackagesPath in UserCfg.opt), which
@@ -37,6 +39,12 @@ if (!fs.existsSync(COMMUNITY)) {
   process.exit(1);
 }
 
+const legacy = path.join(COMMUNITY, LEGACY_PKG);
+if (fs.existsSync(legacy)) {
+  fs.rmSync(legacy, { recursive: true, force: true });
+  console.log(`Removed the old hook package ${legacy}`);
+}
+
 if (args.has('--remove')) {
   fs.rmSync(target, { recursive: true, force: true });
   console.log(`Removed ${target}`);
@@ -47,7 +55,7 @@ if (args.has('--remove')) {
 const REL = path.join('html_ui', 'Pages', 'VCockpit', 'Instruments', 'Shared', 'BaseInstrument.js');
 const others = fs
   .readdirSync(COMMUNITY)
-  .filter((name) => name !== PKG && fs.existsSync(path.join(COMMUNITY, name, REL)));
+  .filter((name) => name !== PKG && name !== LEGACY_PKG && fs.existsSync(path.join(COMMUNITY, name, REL)));
 if (others.length && !args.has('--force')) {
   console.error(
     `Other Community package(s) also replace BaseInstrument.js: ${others.join(', ')}\n` +

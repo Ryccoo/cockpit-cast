@@ -1,6 +1,6 @@
 // Updates for the client app, from the project's GitHub releases.
 //
-//   Windows, installed with the Setup program: downloads CockpitLink-Client-Setup.exe, checks it against
+//   Windows, installed with the Setup program: downloads CockpitCast-Client-Setup.exe, checks it against
 //   the release's SHA256SUMS.txt, runs it silently and quits; the installer starts the app again with
 //   the same command line (installer/client.iss, /UPDATE=1 /ARGS=...).
 //   Elsewhere (Linux, macOS, the zip): the Settings page shows that a new version exists, with a link.
@@ -20,8 +20,8 @@ import 'package:material_ui/material_ui.dart';
 import 'about.dart';
 import 'desktop.dart';
 
-const _releaseApi = 'https://api.github.com/repos/Ryccoo/cockpit-link/releases/latest';
-const _asset = 'CockpitLink-Client-Setup.exe';
+const _releaseApi = 'https://api.github.com/repos/Ryccoo/cockpit-cast/releases/latest';
+const _asset = 'CockpitCast-Client-Setup.exe';
 const _sums = 'SHA256SUMS.txt';
 
 class Updater extends ChangeNotifier {
@@ -64,7 +64,7 @@ class Updater extends ChangeNotifier {
 
   Future<void> check() async {
     try {
-      final j = await _getJson(Platform.environment['COCKPIT_LINK_UPDATE_URL'] ?? _releaseApi); // override: testing
+      final j = await _getJson(Platform.environment['COCKPITCAST_UPDATE_URL'] ?? _releaseApi); // override: testing
       final v = '${j['tag_name'] ?? ''}'.replaceFirst(RegExp('^v'), '');
       if (!RegExp(r'^\d+\.\d+\.\d+$').hasMatch(v)) throw 'unexpected release tag ${j['tag_name']}';
       latest = v;
@@ -107,10 +107,10 @@ class Updater extends ChangeNotifier {
       if (want == null) throw '$_sums has no checksum for $_asset';
       final data = await _getBytes(setupUrl);
       if (sha256.convert(data).toString() != want) throw 'the download does not match its checksum';
-      final dir = await Directory.systemTemp.createTemp('cockpit-link-update');
-      final file = File('${dir.path}\\CockpitLink-Client-$latest-Setup.exe');
+      final dir = await Directory.systemTemp.createTemp('cockpitcast-update');
+      final file = File('${dir.path}\\CockpitCast-Client-$latest-Setup.exe');
       await file.writeAsBytes(data, flush: true);
-      final log = '${Platform.environment['LOCALAPPDATA'] ?? dir.path}\\CockpitLink\\client-update.log';
+      final log = '${Platform.environment['LOCALAPPDATA'] ?? dir.path}\\CockpitCast\\client-update.log';
       await Process.start(
         file.path,
         [
@@ -139,7 +139,7 @@ class Updater extends ChangeNotifier {
 class _NoRelease implements Exception {}
 
 Future<Map<String, dynamic>> _getJson(String url) async {
-  final client = HttpClient()..userAgent = 'cockpit-link-client/$appVersion';
+  final client = HttpClient()..userAgent = 'cockpitcast-client/$appVersion';
   try {
     final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 20));
     req.headers.set('accept', 'application/vnd.github+json');
@@ -153,7 +153,7 @@ Future<Map<String, dynamic>> _getJson(String url) async {
 }
 
 Future<List<int>> _getBytes(String url) async {
-  final client = HttpClient()..userAgent = 'cockpit-link-client/$appVersion';
+  final client = HttpClient()..userAgent = 'cockpitcast-client/$appVersion';
   try {
     final req = await client.getUrl(Uri.parse(url)); // follows GitHub's redirect to its file storage
     final res = await req.close().timeout(const Duration(minutes: 5));

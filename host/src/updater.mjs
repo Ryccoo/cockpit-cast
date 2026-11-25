@@ -3,14 +3,14 @@
 // monitor on this PC).
 //
 // Installing (installed copies on Windows only; a git checkout just shows that a release exists):
-//   1. download CockpitLink-Host-Setup.exe from the release, check it against the release's
+//   1. download CockpitCast-Host-Setup.exe from the release, check it against the release's
 //      SHA256SUMS.txt;
 //   2. the caller tells the client apps to update too;
 //   3. the tray launcher stops the host, starts the installer and exits (tray/src/tray.cpp, "install");
 //      without the launcher, the host starts the installer itself and exits.
-//   The installer runs silently (a progress window only), waits for Cockpit Link to close, and starts it
-//   again when done (/UPDATE=1, see installer/host.iss). Its log: %LOCALAPPDATA%\CockpitLink\logs\update-install.log.
-// Turn the check off with "updates": false in host/config.json or COCKPIT_LINK_UPDATES=0.
+//   The installer runs silently (a progress window only), waits for CockpitCast to close, and starts it
+//   again when done (/UPDATE=1, see installer/host.iss). Its log: %LOCALAPPDATA%\CockpitCast\logs\update-install.log.
+// Turn the check off with "updates": false in host/config.json or COCKPITCAST_UPDATES=0.
 
 import { EventEmitter } from 'node:events';
 import { spawn } from 'node:child_process';
@@ -22,7 +22,7 @@ import { makeLog } from './log.mjs';
 const log = makeLog('update');
 const FIRST_CHECK_MS = 60_000;
 const CHECK_EVERY_MS = 12 * 3600_000;
-const ASSET = 'CockpitLink-Host-Setup.exe';
+const ASSET = 'CockpitCast-Host-Setup.exe';
 const SUMS = 'SHA256SUMS.txt';
 
 export class Updater extends EventEmitter {
@@ -34,7 +34,7 @@ export class Updater extends EventEmitter {
     this.dir = path.join(cfg.dataDir, 'updates');
     // Installed by the Setup program (its uninstaller sits next to the tray launcher).
     this.installDir = cfg.root;
-    this.canInstall = process.platform === 'win32' && fs.existsSync(path.join(cfg.root, 'unins000.exe')) && fs.existsSync(path.join(cfg.root, 'cockpit-link.exe'));
+    this.canInstall = process.platform === 'win32' && fs.existsSync(path.join(cfg.root, 'unins000.exe')) && fs.existsSync(path.join(cfg.root, 'cockpitcast.exe'));
     this.release = null; // { version, url, assets: { name: download url } }
     this.state = 'idle'; // idle | available | downloading | installing | error
     this.error = null;
@@ -64,7 +64,7 @@ export class Updater extends EventEmitter {
   async check() {
     try {
       const res = await fetch(this.cfg.updateUrl || `https://api.github.com/repos/${this.repo}/releases/latest`, {
-        headers: { accept: 'application/vnd.github+json', 'user-agent': 'cockpit-link-updater' },
+        headers: { accept: 'application/vnd.github+json', 'user-agent': 'cockpitcast-updater' },
         signal: AbortSignal.timeout(20_000),
       });
       if (res.status === 404) return; // no release yet
@@ -76,7 +76,7 @@ export class Updater extends EventEmitter {
       const was = this.release?.version;
       this.release = { version, url: r.html_url, assets };
       if (newer(version, this.current)) {
-        if (was !== version) log.info(`Cockpit Link ${version} is available (this is ${this.current}): ${r.html_url}`);
+        if (was !== version) log.info(`CockpitCast ${version} is available (this is ${this.current}): ${r.html_url}`);
         if (this.state === 'idle' || this.state === 'error') this.set('available');
       } else if (this.state === 'available') this.set('idle');
     } catch (e) {
@@ -99,7 +99,7 @@ export class Updater extends EventEmitter {
       const have = crypto.createHash('sha256').update(data).digest('hex');
       if (have !== want) throw new Error('the download does not match its checksum');
       fs.mkdirSync(this.dir, { recursive: true });
-      const file = path.join(this.dir, `CockpitLink-Host-${version}-Setup.exe`);
+      const file = path.join(this.dir, `CockpitCast-Host-${version}-Setup.exe`);
       fs.writeFileSync(file, data);
       log.info(`downloaded ${file} (${(data.length / 1e6).toFixed(1)} MB, checksum OK)`);
       return file;
@@ -134,7 +134,7 @@ export class Updater extends EventEmitter {
   cleanOld() {
     try {
       for (const name of fs.readdirSync(this.dir)) {
-        const v = /^CockpitLink-Host-(\d+\.\d+\.\d+)-Setup\.exe$/.exec(name)?.[1];
+        const v = /^CockpitCast-Host-(\d+\.\d+\.\d+)-Setup\.exe$/.exec(name)?.[1];
         if (v && !newer(v, this.current)) fs.rmSync(path.join(this.dir, name), { force: true });
       }
     } catch {}
@@ -146,7 +146,7 @@ export class Updater extends EventEmitter {
 }
 
 async function get(url) {
-  const res = await fetch(url, { headers: { 'user-agent': 'cockpit-link-updater' }, redirect: 'follow', signal: AbortSignal.timeout(300_000) });
+  const res = await fetch(url, { headers: { 'user-agent': 'cockpitcast-updater' }, redirect: 'follow', signal: AbortSignal.timeout(300_000) });
   if (!res.ok) throw new Error(`download failed (${res.status}): ${url}`);
   return res;
 }

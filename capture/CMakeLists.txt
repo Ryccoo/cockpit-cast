@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cockpit_link_capture CXX)
+project(cockpitcast_capture CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,7 +18,7 @@ add_library(capture SHARED
   src/pipe.cpp
   src/log.cpp
 )
-set_target_properties(capture PROPERTIES OUTPUT_NAME cockpit-link-capture)
+set_target_properties(capture PROPERTIES OUTPUT_NAME cockpitcast-capture)
 target_link_libraries(capture PRIVATE d3d12 dxgi windowscodecs shlwapi ole32 shell32)
 # Keep a .pdb next to the DLL in Release too, for readable crash stacks.
 target_link_options(capture PRIVATE $<$<CONFIG:Release>:/DEBUG /OPT:REF /OPT:ICF>)

@@ -35,14 +35,14 @@
     }
     el.classList.toggle('err', u.state === 'error');
     const notes = u.url ? ` <a class="l" href="${esc(u.url)}" target="_blank" rel="noopener">What's new</a>` : '';
-    if (u.state === 'downloading') el.innerHTML = `<span class="msg">Downloading Cockpit Link ${esc(u.latest)}…</span>`;
-    else if (u.state === 'installing') el.innerHTML = `<span class="msg">Installing Cockpit Link ${esc(u.latest)}. The host and the display PCs restart by themselves; this page reconnects when it is back.</span>`;
+    if (u.state === 'downloading') el.innerHTML = `<span class="msg">Downloading CockpitCast ${esc(u.latest)}…</span>`;
+    else if (u.state === 'installing') el.innerHTML = `<span class="msg">Installing CockpitCast ${esc(u.latest)}. The host and the display PCs restart by themselves; this page reconnects when it is back.</span>`;
     else {
-      const what = u.state === 'error' ? `Update failed: ${esc(u.error)}` : `<b>Cockpit Link ${esc(u.latest)}</b> is available (this is ${esc(u.current)}).`;
+      const what = u.state === 'error' ? `Update failed: ${esc(u.error)}` : `<b>CockpitCast ${esc(u.latest)}</b> is available (this is ${esc(u.current)}).`;
       const action = !u.canInstall
-        ? '<a class="b" href="https://cockpitlink.ludvigh.dev/#download" target="_blank" rel="noopener">Download</a>'
+        ? '<a class="b" href="https://cockpitcast.ludvigh.dev/#download" target="_blank" rel="noopener">Download</a>'
         : local
-          ? `<button data-a="install" title="Downloads the new version, installs it and restarts Cockpit Link. Display PCs with the installed client update too.">${u.state === 'error' ? 'Try again' : 'Install and restart'}</button>`
+          ? `<button data-a="install" title="Downloads the new version, installs it and restarts CockpitCast. Display PCs with the installed client update too.">${u.state === 'error' ? 'Try again' : 'Install and restart'}</button>`
           : '<span>Install it from the sim PC (tray icon or this page there).</span>';
       el.innerHTML = `<span class="msg">${what}${notes}</span>${action}<button class="x" data-a="close" title="Hide until the next version">✕</button>`;
     }

@@ -1,4 +1,4 @@
-// Test DLL for the injector and the host's capture link, built as cockpit-link-capture.dll in the
+// Test DLL for the injector and the host's capture link, built as cockpitcast-capture.dll in the
 // test folder. It hooks nothing and captures nothing: once loaded it connects to the host's pipe,
 // says HELLO, logs which process it is in, logs every CONFIG it receives, sends STATS every 5 s,
 // and goes quiet on SHUTDOWN or when heartbeats stop. Use it with fake-sim.exe.
@@ -13,7 +13,7 @@
 
 namespace {
 
-const wchar_t* kPipe = L"\\\\.\\pipe\\cockpit-link-capture";
+const wchar_t* kPipe = L"\\\\.\\pipe\\cockpitcast-capture";
 enum : uint8_t { HELLO = 1, LOG = 3, STATS = 4, CONFIG = 16, HEARTBEAT = 17, SHUTDOWN = 18 };
 
 HANDLE g_pipe = INVALID_HANDLE_VALUE;

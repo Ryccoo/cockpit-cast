@@ -1,4 +1,4 @@
-// Gauge layouts, shared by all clients. Stored in %LOCALAPPDATA%\CockpitLink\layouts.json; the
+// Gauge layouts, shared by all clients. Stored in %LOCALAPPDATA%\CockpitCast\layouts.json; the
 // defaults in host/defaults/layouts.json are used until the user saves their own.
 //
 // Layout: { id, name, width, height, gauges: [ { id, type, x, y, w, h, options } ] }

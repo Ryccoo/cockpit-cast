@@ -1,4 +1,4 @@
-// Cockpit Link tray icon (Windows): shows that the host is running.
+// CockpitCast tray icon (Windows): shows that the host is running.
 //
 //   click            open the layout editor in the default browser
 //   right-click      menu: layout editor, monitor, current status, install an update, quit the host
@@ -47,7 +47,7 @@ std::wstring g_update;   // newer version that can be installed, from the host
 std::wstring g_installer;  // set by "install": run it once the host has stopped
 HANDLE g_single = nullptr; // the single-instance mutex (the installer checks it)
 std::wstring g_level = L"idle";
-std::wstring g_status = L"Cockpit Link host";
+std::wstring g_status = L"CockpitCast host";
 
 // The host's channel: our stdin/stdout when the host started us; pipes to the node process in launcher mode.
 HANDLE g_fromHost = nullptr, g_toHost = nullptr;
@@ -168,8 +168,8 @@ void ShowMenu(int x, int y) {
   for (const auto& line : Lines(g_status)) AppendMenuW(m, MF_STRING | MF_GRAYED, 0, line.c_str());
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
   if (!g_update.empty()) AppendMenuW(m, MF_STRING, CMD_UPDATE, (L"Install update " + g_update + L" and restart").c_str());
-  if (!g_support.empty()) AppendMenuW(m, MF_STRING, CMD_SUPPORT, L"Support Cockpit Link \u2665 (Ko-fi)");
-  AppendMenuW(m, MF_STRING, CMD_QUIT, L"Quit Cockpit Link host");
+  if (!g_support.empty()) AppendMenuW(m, MF_STRING, CMD_SUPPORT, L"Support CockpitCast \u2665 (Ko-fi)");
+  AppendMenuW(m, MF_STRING, CMD_QUIT, L"Quit CockpitCast host");
   SetMenuDefaultItem(m, CMD_EDITOR, FALSE);
   SetForegroundWindow(g_wnd); // so the menu closes when clicking elsewhere
   UINT cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, x, y, 0, g_wnd, nullptr);
@@ -179,7 +179,7 @@ void ShowMenu(int x, int y) {
   else if (cmd == CMD_SUPPORT) Open(g_support);
   else if (cmd == CMD_UPDATE) {
     SendToHost("update\n");
-    Notify(L"Cockpit Link", L"Downloading the update. Cockpit Link restarts by itself when it is installed.", NIIF_INFO);
+    Notify(L"CockpitCast", L"Downloading the update. CockpitCast restarts by itself when it is installed.", NIIF_INFO);
   }
   else if (cmd == CMD_QUIT) {
     SendToHost("quit\n");
@@ -198,7 +198,7 @@ void OnLine(const std::wstring& line) {
   else if (cmd == L"monitor" && !rest.empty()) g_monitor = rest;
   else if (cmd == L"support" && rest.rfind(L"https://", 0) == 0) g_support = rest;
   else if (cmd == L"update" && !rest.empty() && rest.size() < 32) {
-    if (rest != g_update) Notify(L"Cockpit Link update", L"Version " + rest + L" is available. Right-click the Cockpit Link icon to install it.", NIIF_INFO);
+    if (rest != g_update) Notify(L"CockpitCast update", L"Version " + rest + L" is available. Right-click the CockpitCast icon to install it.", NIIF_INFO);
     g_update = rest;
   }
   else if (cmd == L"install" && g_launcher && rest.size() > 4 && _wcsicmp(rest.c_str() + rest.size() - 4, L".exe") == 0) {
@@ -210,7 +210,7 @@ void OnLine(const std::wstring& line) {
   else if (cmd == L"status") {
     size_t sp2 = rest.find(L' ');
     std::wstring level = rest.substr(0, sp2);
-    std::wstring text = sp2 == std::wstring::npos ? L"Cockpit Link host" : rest.substr(sp2 + 1);
+    std::wstring text = sp2 == std::wstring::npos ? L"CockpitCast host" : rest.substr(sp2 + 1);
     for (size_t i; (i = text.find(L"\\n")) != std::wstring::npos;) text.replace(i, 2, L"\n");
     g_status = text;
     if (level != g_level) {
@@ -229,14 +229,14 @@ void OnLine(const std::wstring& line) {
 bool StartHost();
 
 // Update: run the installer silently. It shows its progress, closes what is still open, and starts
-// Cockpit Link again when done (/UPDATE=1; installer/host.iss). Its log goes next to the host's.
+// CockpitCast again when done (/UPDATE=1; installer/host.iss). Its log goes next to the host's.
 void RunInstaller() {
   if (g_single) {  // the installer refuses to run while this mutex exists
     CloseHandle(g_single);
     g_single = nullptr;
   }
   wchar_t logPath[MAX_PATH] = L"";
-  ExpandEnvironmentStringsW(L"%LOCALAPPDATA%\\CockpitLink\\logs\\update-install.log", logPath, MAX_PATH);
+  ExpandEnvironmentStringsW(L"%LOCALAPPDATA%\\CockpitCast\\logs\\update-install.log", logPath, MAX_PATH);
   std::wstring cmd = L"\"" + g_installer + L"\" /SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /UPDATE=1 /LOG=\"" + logPath + L"\"";
   STARTUPINFOW si{sizeof(si)};
   PROCESS_INFORMATION pi{};
@@ -244,8 +244,8 @@ void RunInstaller() {
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
   } else {
-    std::wstring msg = L"Cockpit Link could not start the update installer:\n" + g_installer;
-    MessageBoxW(nullptr, msg.c_str(), L"Cockpit Link", MB_ICONERROR);
+    std::wstring msg = L"CockpitCast could not start the update installer:\n" + g_installer;
+    MessageBoxW(nullptr, msg.c_str(), L"CockpitCast", MB_ICONERROR);
   }
 }
 
@@ -279,17 +279,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
       } else if (!g_launcher || g_quitting) {
         DestroyWindow(hwnd);
       } else if (++g_restarts <= MAX_RESTARTS) {
-        Notify(L"Cockpit Link", L"The host stopped unexpectedly; starting it again.");
+        Notify(L"CockpitCast", L"The host stopped unexpectedly; starting it again.");
         SetTimer(hwnd, TIMER_RESTART, 3000, nullptr);
       } else {
         g_level = L"idle";
-        g_status = L"Cockpit Link host stopped\nSee %LOCALAPPDATA%\\CockpitLink\\logs\\host.log";
+        g_status = L"CockpitCast host stopped\nSee %LOCALAPPDATA%\\CockpitCast\\logs\\host.log";
         if (HICON old = g_icon) {
           g_icon = MakeIcon(g_level);
           DestroyIcon(old);
         }
         UpdateIcon();
-        Notify(L"Cockpit Link", L"The host keeps stopping (is another copy running?). Details in the host log.");
+        Notify(L"CockpitCast", L"The host keeps stopping (is another copy running?). Details in the host log.");
       }
       return 0;
     case WM_TIMER:
@@ -386,7 +386,7 @@ bool StartHost() {
   si.hStdOutput = outW;
   si.hStdError = nul;
   std::wstring cmd = L"\"" + g_node + L"\" \"" + g_script + L"\"";
-  SetEnvironmentVariableW(L"COCKPIT_LINK_TRAY_PARENT", L"1");  // the host talks to us over its stdin/stdout
+  SetEnvironmentVariableW(L"COCKPITCAST_TRAY_PARENT", L"1");  // the host talks to us over its stdin/stdout
   BOOL ok = CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, g_hostDir.c_str(), &si, &g_host);
   CloseHandle(inR);
   CloseHandle(outW);
@@ -409,13 +409,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
   HANDLE stdIn = GetStdHandle(STD_INPUT_HANDLE);
   g_launcher = !stdIn || stdIn == INVALID_HANDLE_VALUE || GetFileType(stdIn) != FILE_TYPE_PIPE;
   if (g_launcher) {
-    g_single = CreateMutexW(nullptr, TRUE, L"Local\\CockpitLinkTray");
+    g_single = CreateMutexW(nullptr, TRUE, L"Local\\CockpitCastTray");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {  // already running: just open the editor
       Open(g_editor);
       return 0;
     }
     if (!FindHost()) {
-      MessageBoxW(nullptr, L"Cockpit Link: the host program (host\\src\\index.mjs) was not found next to this program.", L"Cockpit Link", MB_ICONERROR);
+      MessageBoxW(nullptr, L"CockpitCast: the host program (host\\src\\index.mjs) was not found next to this program.", L"CockpitCast", MB_ICONERROR);
       return 1;
     }
   } else {
@@ -430,17 +430,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
   WNDCLASSW wc{};
   wc.lpfnWndProc = WndProc;
   wc.hInstance = inst;
-  wc.lpszClassName = L"CockpitLinkTray";
+  wc.lpszClassName = L"CockpitCastTray";
   RegisterClassW(&wc);
   // A hidden top-level window (not message-only: it must receive the TaskbarCreated broadcast).
-  g_wnd = CreateWindowExW(0, wc.lpszClassName, L"Cockpit Link", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, inst, nullptr);
+  g_wnd = CreateWindowExW(0, wc.lpszClassName, L"CockpitCast", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, inst, nullptr);
   g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
   g_icon = MakeIcon(g_level);
   AddIcon();
   if (g_launcher) {
     if (!StartHost()) {
-      std::wstring msg = L"Cockpit Link: could not start the host (" + g_node + L").";
-      MessageBoxW(nullptr, msg.c_str(), L"Cockpit Link", MB_ICONERROR);
+      std::wstring msg = L"CockpitCast: could not start the host (" + g_node + L").";
+      MessageBoxW(nullptr, msg.c_str(), L"CockpitCast", MB_ICONERROR);
       RemoveIcon();
       return 1;
     }

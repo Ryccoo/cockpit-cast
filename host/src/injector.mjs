@@ -1,4 +1,4 @@
-// Decides when to load capture.dll into the sim, and does it through cockpit-link-injector.exe.
+// Decides when to load capture.dll into the sim, and does it through cockpitcast-injector.exe.
 //
 // Rules:
 //   - only once a flight has been live (running, unpaused) for injectDelaySec; never in menus or loading
@@ -132,13 +132,13 @@ export class Injector extends EventEmitter {
     }
   }
 
-  // Copy the DLL to instances/<pid>-<time>/cockpit-link-capture.dll (the file name must stay the same:
+  // Copy the DLL to instances/<pid>-<time>/cockpitcast-capture.dll (the file name must stay the same:
   // the injector recognises our module by it).
   stage(pid) {
     const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
     const dir = path.join(this.instancesDir, `${pid}-${stamp}`);
     fs.mkdirSync(dir, { recursive: true });
-    const target = path.join(dir, 'cockpit-link-capture.dll');
+    const target = path.join(dir, 'cockpitcast-capture.dll');
     fs.copyFileSync(this.cfg.dllPath, target);
     const pdb = this.cfg.dllPath.replace(/\.dll$/i, '.pdb');
     if (fs.existsSync(pdb)) fs.copyFileSync(pdb, target.replace(/\.dll$/i, '.pdb'));

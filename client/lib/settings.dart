@@ -264,7 +264,7 @@ class Settings {
     try {
       return Platform.localHostname;
     } catch (_) {
-      return 'Cockpit Link client';
+      return 'CockpitCast client';
     }
   }
 }

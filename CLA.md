@@ -1,19 +1,19 @@
 # Contributor License Agreement
 
-Thank you for contributing to Cockpit Link. This agreement lets the project accept your contribution while
-keeping two promises: Cockpit Link stays free software under the GPL-3.0, and the project can also offer
+Thank you for contributing to CockpitCast. This agreement lets the project accept your contribution while
+keeping two promises: CockpitCast stays free software under the GPL-3.0, and the project can also offer
 it under a commercial licence (for example to a company building it into a closed product), which helps
 fund its development. You keep the copyright in your work.
 
 By signing (the CLA bot asks you to on your first pull request), you agree to the following for every
-contribution you submit to the Cockpit Link project, now or later.
+contribution you submit to the CockpitCast project, now or later.
 
 ## 1. Definitions
 
 - **"You"**: the person or legal entity submitting a contribution.
 - **"Contribution"**: any original work of authorship (code, documentation, images, layouts or other
   material) that You submit to the project, for example through a pull request, a patch or an issue.
-- **"Project owner"**: the owner of the Cockpit Link repository on GitHub, who maintains the project and
+- **"Project owner"**: the owner of the CockpitCast repository on GitHub, who maintains the project and
   decides on its licensing.
 
 ## 2. Copyright licence
@@ -35,7 +35,7 @@ combination with the project.
 ## 4. Your rights
 
 You keep the copyright in Your Contributions. You may use them for any other purpose. The Project owner
-promises that every Contribution that is included in Cockpit Link stays available under the GPL-3.0 (or a
+promises that every Contribution that is included in CockpitCast stays available under the GPL-3.0 (or a
 later version of the GPL) in the public project.
 
 ## 5. Your promises

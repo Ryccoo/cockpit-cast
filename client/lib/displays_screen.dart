@@ -32,7 +32,7 @@ class _DisplaysScreenState extends State<DisplaysScreen> {
   bool overlay = false;
   Timer? _hideOverlay;
   Timer? _discoverRetry;
-  String _discoverText = 'Looking for the Cockpit Link host on the network...';
+  String _discoverText = 'Looking for the CockpitCast host on the network...';
 
   Settings get s => widget.settings;
   OutputConfig get o => s.output;
@@ -58,7 +58,7 @@ class _DisplaysScreenState extends State<DisplaysScreen> {
         _connect(hosts.first.address, hosts.first.port);
         return;
       }
-      setState(() => _discoverText = 'No Cockpit Link host found yet. Is the host running on the sim PC?\nSearching again...');
+      setState(() => _discoverText = 'No CockpitCast host found yet. Is the host running on the sim PC?\nSearching again...');
     } catch (_) {
       if (!mounted) return;
       setState(() => _discoverText = 'Network search is not available on this device.\nStart the app with --host <address>.');

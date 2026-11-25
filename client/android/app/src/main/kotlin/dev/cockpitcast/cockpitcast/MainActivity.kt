@@ -1,4 +1,4 @@
-package dev.cockpitlink.cockpit_link
+package dev.cockpitcast.cockpitcast
 
 import io.flutter.embedding.android.FlutterActivity
 

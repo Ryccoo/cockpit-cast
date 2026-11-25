@@ -1,4 +1,4 @@
-// Cockpit Link host: entry point.
+// CockpitCast host: entry point.
 //   capture.dll <--(named pipe, two-way)--> CaptureLink --> FrameHub --> ClientServer --(WebSocket)--> client apps
 //   Community hook --(WebSocket /hook)--> HookServer --> layouts --+
 //   client subscriptions ------------------------------------------+--> CaptureConfig --> CONFIG to capture.dll
@@ -89,6 +89,7 @@ const clients = new ClientServer({
   screens,
   catalog,
   maxDataHz: cfg.maxDataHz,
+  dataDir: cfg.dataDir,
   onWanted: (w) => {
     clientWanted = w;
     pushWanted();
@@ -158,7 +159,7 @@ updater.on('change', (u) => {
 // The injector waits on liveForSec, which changes without an event.
 sim.on('status', () => injector.tick());
 
-log.info(`Cockpit Link host ${version} starting (log: ${cfg.logFile})`);
+log.info(`CockpitCast host ${version} starting (log: ${cfg.logFile})`);
 try {
   await clients.start();
 } catch (err) {
@@ -181,12 +182,12 @@ const tray = new Tray({
     return {
       level: live.length ? 'live' : s.connected ? 'sim' : 'idle',
       lines: [
-        'Cockpit Link host',
+        'CockpitCast host',
         s.connected ? `Sim: ${s.aircraft ?? 'running'}` : 'Sim: not running',
         // Streaming: only what client screens show is captured. Setup: an editor or monitor page is
         // open and visible, and previews are captured too.
         pages ? `Setup: ${pages} open, previews on` : `Streaming: ${live.length ? live.map((d) => d.name).join(', ') : 'nothing captured'}`,
-        `Connected apps: ${clients.clients.size}`,
+        appsLine(clients.appsInfo()),
       ],
     };
   },
@@ -197,7 +198,7 @@ if (cfg.tray || Tray.parented) tray.start();
 updater.start();
 
 // Install the newer version: download and check it, tell the client apps to update themselves too,
-// then hand over to the installer, which restarts Cockpit Link when done (see updater.mjs).
+// then hand over to the installer, which restarts CockpitCast when done (see updater.mjs).
 let installing = false;
 async function installUpdate() {
   if (installing) return;
@@ -220,6 +221,11 @@ async function installUpdate() {
   }
 }
 log.info(`ready. Debug monitor: http://localhost:${cfg.port}/`);
+
+// "Display apps: 2 (1 paused)": the client apps only, not the editor or monitor pages.
+function appsLine({ apps, paused }) {
+  return `Display apps: ${apps}${paused ? ` (${paused} paused)` : ''}`;
+}
 
 async function shutdown() {
   log.info('shutting down');

@@ -39,7 +39,7 @@ export class SimMonitor extends EventEmitter {
   async connect() {
     if (this.stopped) return;
     try {
-      const { recvOpen, handle } = await open('Cockpit Link', Protocol.KittyHawk);
+      const { recvOpen, handle } = await open('CockpitCast', Protocol.KittyHawk);
       this.handle = handle;
       this.lastError = null;
       log.info(`connected to ${recvOpen.applicationName}`);

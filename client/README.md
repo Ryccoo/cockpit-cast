@@ -1,4 +1,4 @@
-# Cockpit Link client
+# CockpitCast client
 
 The app that runs on the display devices. Build and usage instructions are in the main
 [README](../README.md#client-app) (section "Client app").

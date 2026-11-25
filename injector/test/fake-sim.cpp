@@ -1,5 +1,5 @@
 // Stand-in for the sim process when testing injection: does nothing until closed.
-// Run it, then point the host at it: COCKPIT_LINK_SIM_EXE=fake-sim.exe.
+// Run it, then point the host at it: COCKPITCAST_SIM_EXE=fake-sim.exe.
 #include <windows.h>
 #include <cstdio>
 

@@ -151,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     conn = null;
     s.outputIndex = 0;
     if (!s.fromCommandLine) await startExtraWindows(s);
-    await placeWindow(s.output, title: 'Cockpit Link · window 1');
+    await placeWindow(s.output, title: 'CockpitCast · window 1');
     if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => DisplaysScreen(settings: s)));
     // Back from the displays: settings again, as a normal window, extra windows closed.
@@ -192,7 +192,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cockpit Link settings')),
+      appBar: AppBar(title: const Text('CockpitCast settings')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
@@ -203,7 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Find the host automatically'),
-                  subtitle: const Text('Uses the first Cockpit Link host on this network'),
+                  subtitle: const Text('Uses the first CockpitCast host on this network'),
                   value: autoHost,
                   onChanged: (v) {
                     setState(() => autoHost = v);
@@ -264,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (isDesktop)
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Start Cockpit Link when I sign in'),
+                    title: const Text('Start CockpitCast when I sign in'),
                     value: s.launchAtLogin,
                     onChanged: (v) => setState(() => s.launchAtLogin = v),
                   ),
@@ -302,7 +302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   icon: const Icon(Icons.favorite, color: Colors.redAccent),
-                  label: const Text('Support Cockpit Link on Ko-fi'),
+                  label: const Text('Support CockpitCast on Ko-fi'),
                   onPressed: () => launchUrl(Uri.parse(supportUrl), mode: LaunchMode.externalApplication),
                 ),
               ),
@@ -327,7 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ? 'Not checked yet.'
                     : 'Up to date.';
         return section('Updates', [
-          Text('Cockpit Link $appVersion. $status'),
+          Text('CockpitCast $appVersion. $status'),
           if (u.error != null) Text(u.error!, style: TextStyle(color: theme.colorScheme.error)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [

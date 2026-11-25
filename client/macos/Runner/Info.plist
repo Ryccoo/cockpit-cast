@@ -29,10 +29,10 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Cockpit Link connects to the Cockpit Link host on your network to show cockpit displays.</string>
+	<string>CockpitCast connects to the CockpitCast host on your network to show cockpit displays.</string>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_cockpit-link._tcp</string>
+		<string>_cockpitcast._tcp</string>
 	</array>
 </dict>
 </plist>

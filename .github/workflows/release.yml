@@ -1,8 +1,8 @@
 # Builds a release when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0) and attaches:
-#   CockpitLink-Host-Setup.exe            sim PC (Windows)
-#   CockpitLink-Client-Setup.exe          display PCs (Windows), and CockpitLink-Client-windows.zip
-#   CockpitLink-Client-linux-x64.tar.gz   Linux PCs
-#   CockpitLink-Client-linux-arm64.tar.gz Raspberry Pi 4/5 (64-bit OS)
+#   CockpitCast-Host-Setup.exe            sim PC (Windows)
+#   CockpitCast-Client-Setup.exe          display PCs (Windows), and CockpitCast-Client-windows.zip
+#   CockpitCast-Client-linux-x64.tar.gz   Linux PCs
+#   CockpitCast-Client-linux-arm64.tar.gz Raspberry Pi 4/5 (64-bit OS)
 #   SHA256SUMS.txt                        checksums (the updater checks downloads against them)
 # The file names have no version in them, so .../releases/latest/download/<name> always gets the latest.
 # The tag must match the version in host/package.json, client/pubspec.yaml and client/lib/about.dart.
@@ -63,9 +63,9 @@ jobs:
         run: |
           $v = '${{ needs.version.outputs.version }}'
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item "installer/output/CockpitLink-Host-$v-Setup.exe" dist/CockpitLink-Host-Setup.exe
-          Copy-Item "installer/output/CockpitLink-Client-$v-Setup.exe" dist/CockpitLink-Client-Setup.exe
-          Copy-Item "installer/output/CockpitLink-Client-$v-windows.zip" dist/CockpitLink-Client-windows.zip
+          Copy-Item "installer/output/CockpitCast-Host-$v-Setup.exe" dist/CockpitCast-Host-Setup.exe
+          Copy-Item "installer/output/CockpitCast-Client-$v-Setup.exe" dist/CockpitCast-Client-Setup.exe
+          Copy-Item "installer/output/CockpitCast-Client-$v-windows.zip" dist/CockpitCast-Client-windows.zip
       - uses: actions/upload-artifact@v7
         with:
           name: windows
@@ -99,7 +99,7 @@ jobs:
         run: |
           mkdir -p dist
           cp LICENSE installer/THIRD-PARTY-NOTICES.txt client/build/linux/${{ matrix.arch }}/release/bundle/
-          tar -czf dist/CockpitLink-Client-linux-${{ matrix.arch }}.tar.gz -C client/build/linux/${{ matrix.arch }}/release bundle --transform 's,^bundle,cockpit-link,'
+          tar -czf dist/CockpitCast-Client-linux-${{ matrix.arch }}.tar.gz -C client/build/linux/${{ matrix.arch }}/release bundle --transform 's,^bundle,cockpitcast,'
       - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
@@ -128,5 +128,5 @@ jobs:
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" dist/* --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --title "Cockpit Link $VERSION" --generate-notes --verify-tag
+            gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --title "CockpitCast $VERSION" --generate-notes --verify-tag
           fi

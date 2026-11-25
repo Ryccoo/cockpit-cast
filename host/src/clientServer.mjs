@@ -16,7 +16,14 @@ const MAX_BUFFERED = 1024 * 1024;
 const PAGES = { '/': 'monitor.html', '/monitor.html': 'monitor.html', '/editor': 'editor.html', '/editor.html': 'editor.html', '/update-banner.js': 'update-banner.js' }; // skip frames for a client with more than this unsent
 
 export class ClientServer {
-  constructor({ port, hub, getStatus, getDetail = () => ({}), onWanted = () => {}, onDataWanted = () => {}, onInstallUpdate = null, layouts = null, screens = null, catalog = null, maxDataHz = 60, version }) {
+  constructor({ port, hub, getStatus, getDetail = () => ({}), onWanted = () => {}, onDataWanted = () => {}, onInstallUpdate = null, layouts = null, screens = null, catalog = null, maxDataHz = 60, version, dataDir = null }) {
+    // Paused apps (by device and window): they get nothing, so nothing is captured for them. Kept on disk.
+    this.pausedFile = dataDir ? path.join(dataDir, 'paused-apps.json') : null;
+    this.paused = new Set();
+    try {
+      if (this.pausedFile && fs.existsSync(this.pausedFile)) this.paused = new Set(JSON.parse(fs.readFileSync(this.pausedFile, 'utf8')).paused ?? []);
+    } catch {}
+    this.appsTimer = setInterval(() => this.sendApps(), 2000);
     this.onInstallUpdate = onInstallUpdate;
     this.layouts = layouts;
     this.catalog = catalog;
@@ -134,7 +141,7 @@ export class ClientServer {
   }
 
   onClient(ws, req) {
-    const c = { id: this.nextId++, ws, name: null, addr: req.socket.remoteAddress, subs: new Map(), sent: 0, skipped: 0, delaySum: 0, delayMax: 0 };
+    const c = { id: this.nextId++, ws, name: null, addr: String(req.socket.remoteAddress ?? '').replace(/^::ffff:/, ''), subs: new Map(), sent: 0, skipped: 0, delaySum: 0, delayMax: 0, kind: 'app', paused: false, since: Date.now(), fps: 0, lastCount: 0 };
     this.clients.add(c);
     log.info(`client #${c.id} connected from ${c.addr}`);
     this.send(c, { type: 'welcome', protocol: PROTOCOL_VERSION, host: os.hostname(), version: this.version });
@@ -156,6 +163,7 @@ export class ClientServer {
     ws.on('close', () => {
       for (const s of c.subs.values()) clearTimeout(s.timer);
       this.clients.delete(c);
+      this.appsChanged();
       if (c.catalog) this.catalogViewersChanged();
       this.wantedChanged();
       this.dataWantedChanged();
@@ -166,10 +174,41 @@ export class ClientServer {
 
   onMessage(c, msg) {
     switch (msg.type) {
-      case 'hello':
-        c.name = String(msg.client ?? '').slice(0, 64) || null;
-        log.info(`client #${c.id} is "${c.name}" (protocol ${msg.protocol})`);
+      case 'hello': {
+        const str = (v, n = 64) => (v === undefined || v === null || v === '' ? null : String(v).slice(0, n));
+        c.name = str(msg.client);
+        // Apps say which device and window they are, and what they show (older apps only send a name).
+        c.device = str(msg.device);
+        c.window = str(msg.window, 32);
+        c.shows = str(msg.shows, 80);
+        c.appVersion = str(msg.version, 16);
+        c.platform = str(msg.platform, 16);
+        c.kind = c.name === 'Layout editor' ? 'editor' : c.name === 'Debug monitor' ? 'monitor' : msg.role === 'settings' ? 'settings' : 'app';
+        c.key = c.device ? `${c.device}|${c.window ?? ''}` : `${c.addr}|${c.name ?? ''}`;
+        log.info(`client #${c.id} is "${c.name}"${c.window ? ` ${c.window}` : ''}${c.shows ? ` (${c.shows})` : ''} (protocol ${msg.protocol}${c.appVersion ? `, app ${c.appVersion}` : ''})`);
+        if (c.kind === 'app' && this.paused.has(c.key)) this.setPaused(c, true, false);
+        this.appsChanged();
         break;
+      }
+      case 'shows': // an app's content changed (e.g. another screen chosen)
+        c.shows = String(msg.shows ?? '').slice(0, 80) || null;
+        this.appsChanged();
+        break;
+      case 'subscribeApps': // the monitor page: the list of connected apps, now and every 2 s
+        c.watchApps = true;
+        this.sendApps(c);
+        break;
+      case 'unsubscribeApps':
+        c.watchApps = false;
+        break;
+      case 'appAction': { // from the monitor page: { id, action: 'pause' | 'resume' | 'identify' }
+        const t = [...this.clients].find((x) => x.id === Number(msg.id));
+        if (!t) return this.send(c, { type: 'error', message: 'that app is no longer connected' });
+        if (msg.action === 'pause' || msg.action === 'resume') this.setPaused(t, msg.action === 'pause', true);
+        else if (msg.action === 'identify') this.send(t, { type: 'identify', seconds: 8 });
+        this.sendApps();
+        break;
+      }
       case 'subscribe': {
         const id = String(msg.display ?? '');
         if (!id) return this.send(c, { type: 'error', message: 'subscribe needs "display"' });
@@ -248,6 +287,86 @@ export class ClientServer {
     }
   }
 
+  /// Pause or resume an app: a paused app gets no frames and no gauge data, so nothing is captured or
+  /// read from the sim for it alone. The app shows "Paused". Remembered (device and window) on this PC.
+  setPaused(c, on, remember) {
+    if (c.paused === on) return;
+    c.paused = on;
+    if (remember && c.key) {
+      if (on) this.paused.add(c.key);
+      else this.paused.delete(c.key);
+      this.savePaused();
+    }
+    log.info(`client #${c.id}${c.name ? ` "${c.name}"` : ''}${c.window ? ` ${c.window}` : ''} ${on ? 'paused' : 'resumed'}`);
+    this.send(c, { type: 'paused', paused: on });
+    this.wantedChanged();
+    this.dataWantedChanged();
+    if (!on) for (const id of c.subs.keys()) this.trySend(c, id);
+  }
+
+  savePaused() {
+    if (!this.pausedFile) return;
+    try {
+      fs.mkdirSync(path.dirname(this.pausedFile), { recursive: true });
+      fs.writeFileSync(this.pausedFile, JSON.stringify({ paused: [...this.paused] }, null, 2));
+    } catch (e) {
+      log.warn(`cannot save ${this.pausedFile}: ${e.message}`);
+    }
+  }
+
+  /// Connected apps (not the editor or monitor pages), for the monitor page and the tray.
+  apps() {
+    return [...this.clients].filter((c) => c.kind === 'app' || c.kind === 'settings').map((c) => ({
+      id: c.id,
+      name: c.device ?? c.name ?? `client #${c.id}`,
+      window: c.window ?? null,
+      kind: c.kind,
+      shows: c.shows ?? null,
+      address: c.addr,
+      version: c.appVersion ?? null,
+      platform: c.platform ?? null,
+      paused: c.paused,
+      displays: [...c.subs.keys()],
+      gauges: !!c.data,
+      fps: Math.round(c.fps * 10) / 10,
+      connectedSec: Math.round((Date.now() - c.since) / 1000),
+      canPause: c.kind === 'app',
+    }));
+  }
+
+  appsInfo() {
+    let apps = 0, paused = 0, pages = 0;
+    for (const c of this.clients) {
+      if (c.kind === 'app') {
+        apps++;
+        if (c.paused) paused++;
+      } else if (c.kind !== 'settings') pages++;
+    }
+    return { apps, paused, pages };
+  }
+
+  appsChanged() {
+    clearTimeout(this.appsSoon);
+    this.appsSoon = setTimeout(() => this.sendApps(), 100);
+  }
+
+  /// To the monitor pages that watch the list (all of them, or one).
+  sendApps(only = null) {
+    const now = Date.now();
+    for (const c of this.clients) {
+      const dt = (now - (c.countAt ?? c.since)) / 1000;
+      if (dt >= 1.5) {
+        c.fps = (c.sent - c.lastCount) / dt;
+        c.lastCount = c.sent;
+        c.countAt = now;
+      }
+    }
+    const watchers = only ? [only] : [...this.clients].filter((c) => c.watchApps);
+    if (!watchers.length) return;
+    const text = JSON.stringify({ type: 'apps', apps: this.apps(), ...this.appsInfo() });
+    for (const w of watchers) if (w.ws.readyState === 1) w.ws.send(text);
+  }
+
   /// Setup mode: an editor or monitor page is open and visible (it watches the catalog or displays).
   /// Otherwise only client screens are served (streaming).
   setupInfo() {
@@ -267,6 +386,7 @@ export class ClientServer {
 
   // Send the latest frame of a display to a client, respecting its fps cap and socket backlog.
   trySend(c, id) {
+    if (c.paused) return;
     const s = c.subs.get(id);
     const d = this.hub.get(id);
     if (!s || !d?.frame || d.seq === s.lastSeq || s.timer) return;
@@ -300,7 +420,7 @@ export class ClientServer {
 
   // Gauge data: is any client subscribed? Drives the SimConnect data request.
   dataWantedChanged() {
-    const wanted = [...this.clients].some((c) => c.data);
+    const wanted = [...this.clients].some((c) => c.data && !c.paused);
     if (wanted === this.dataWanted) return;
     this.dataWanted = wanted;
     this.onDataWanted(wanted);
@@ -311,7 +431,7 @@ export class ClientServer {
     let text = null;
     const now = Date.now();
     for (const c of this.clients) {
-      if (!c.data || c.ws.readyState !== 1) continue;
+      if (!c.data || c.paused || c.ws.readyState !== 1) continue;
       if (now - c.data.lastAt < (0.8 * 1000) / c.data.maxHz) continue;
       if (c.ws.bufferedAmount > 256 * 1024) continue; // backed up: skip, the next sample replaces it
       text ??= JSON.stringify({ type: 'data', t: now, v: values.map(round3) });
@@ -331,7 +451,7 @@ export class ClientServer {
   // Which displays anyone is watching, with the highest fps asked for. Drives capture on demand.
   wanted() {
     const m = new Map();
-    for (const c of this.clients) for (const [id, s] of c.subs) m.set(id, Math.max(m.get(id) ?? 0, s.maxFps));
+    for (const c of this.clients) if (!c.paused) for (const [id, s] of c.subs) m.set(id, Math.max(m.get(id) ?? 0, s.maxFps));
     return m;
   }
 
@@ -364,6 +484,10 @@ export class ClientServer {
       clients: [...this.clients].map((c) => ({
         id: c.id,
         name: c.name,
+        kind: c.kind,
+        device: c.device ?? null,
+        window: c.window ?? null,
+        paused: c.paused,
         address: c.addr,
         subscriptions: [...c.subs.entries()].map(([id, s]) => ({ display: id, maxFps: s.maxFps })),
         gaugeData: c.data ? { maxHz: c.data.maxHz } : null,
@@ -375,6 +499,8 @@ export class ClientServer {
   }
 
   close() {
+    clearInterval(this.appsTimer);
+    clearTimeout(this.appsSoon);
     for (const c of this.clients) c.ws.terminate();
     this.wss?.close();
     this.http?.close();

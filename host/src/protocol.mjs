@@ -3,8 +3,8 @@
 export const PROTOCOL_VERSION = 1; // client link (WebSocket)
 export const CAPTURE_PROTOCOL_VERSION = 2; // capture link (pipe)
 export const DEFAULT_PORT = 8800;
-export const PIPE_PATH = '\\\\.\\pipe\\cockpit-link-capture';
-export const MDNS_TYPE = 'cockpit-link';
+export const PIPE_PATH = '\\\\.\\pipe\\cockpitcast-capture';
+export const MDNS_TYPE = 'cockpitcast';
 
 // Pipe message types. 1-15: capture source -> host. 16+: host -> capture source.
 export const MSG = {

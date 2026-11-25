@@ -1,4 +1,4 @@
-Cockpit Link includes the following third-party software. Each keeps its own licence.
+CockpitCast includes the following third-party software. Each keeps its own licence.
 
 Host (sim PC)
   Node.js runtime (node\node.exe)        MIT licence and others, https://github.com/nodejs/node/blob/main/LICENSE
@@ -13,6 +13,6 @@ Client (display PCs)
   Microsoft Visual C++ runtime           msvcp140.dll, vcruntime140.dll, vcruntime140_1.dll:
                                          redistributable files under the Microsoft Visual Studio licence
 
-Microsoft Flight Simulator is a trademark of Microsoft Corporation. Cockpit Link is not affiliated with
-or endorsed by Microsoft or Asobo Studio. Cockpit Link ships no files of the sim: the Community hook is
+Microsoft Flight Simulator is a trademark of Microsoft Corporation. CockpitCast is not affiliated with
+or endorsed by Microsoft or Asobo Studio. CockpitCast ships no files of the sim: the Community hook is
 built on your PC from your own installation.

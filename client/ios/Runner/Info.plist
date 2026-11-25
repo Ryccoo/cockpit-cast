@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Cockpit Link</string>
+	<string>CockpitCast</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>cockpit_link</string>
+	<string>cockpitcast</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -67,10 +67,10 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Cockpit Link connects to the Cockpit Link host on your network to show cockpit displays.</string>
+	<string>CockpitCast connects to the CockpitCast host on your network to show cockpit displays.</string>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_cockpit-link._tcp</string>
+		<string>_cockpitcast._tcp</string>
 	</array>
 </dict>
 </plist>

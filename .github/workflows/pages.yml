@@ -1,5 +1,5 @@
 # Publishes the landing page (site/) to GitHub Pages, with the screenshots from docs/images.
-# Repo settings: Pages > Source: GitHub Actions; custom domain cockpitlink.ludvigh.dev.
+# Repo settings: Pages > Source: GitHub Actions; custom domain cockpitcast.ludvigh.dev.
 name: Website
 
 on:

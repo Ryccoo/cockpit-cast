@@ -1,4 +1,4 @@
-// Finds Cockpit Link hosts on the LAN via mDNS / DNS-SD (_cockpit-link._tcp).
+// Finds CockpitCast hosts on the LAN via mDNS / DNS-SD (_cockpitcast._tcp).
 
 import 'dart:io';
 

@@ -1,4 +1,4 @@
-// cockpit-link-capture.dll: shared declarations.
+// cockpitcast-capture.dll: shared declarations.
 #pragma once
 
 #define WIN32_LEAN_AND_MEAN
@@ -15,7 +15,7 @@
 #define CL_VERSION "0.1.0"
 
 // ---- logging (log.cpp) ----
-// Writes to %LOCALAPPDATA%\CockpitLink\logs\capture.log and, when connected, to the host as LOG.
+// Writes to %LOCALAPPDATA%\CockpitCast\logs\capture.log and, when connected, to the host as LOG.
 void LogInit();
 void Log(const char* fmt, ...);
 void LogFileOnly(const char* fmt, ...);

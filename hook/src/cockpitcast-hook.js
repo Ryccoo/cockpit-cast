@@ -1,6 +1,6 @@
-// ===== Cockpit Link hook (appended to the stock BaseInstrument.js by hook/build-hook.mjs) =====
+// ===== CockpitCast hook (appended to the stock BaseInstrument.js by hook/build-hook.mjs) =====
 // On every instrument page:
-//   - tells the Cockpit Link host on this PC which instruments the page holds (element tag, url, size).
+//   - tells the CockpitCast host on this PC which instruments the page holds (element tag, url, size).
 //     The host learns the big ones as glass displays and answers with its display table
 //     (instrument key -> display id + two marker colours), so new displays need no rebuild of this file;
 //   - for instruments in that table: paints the two marker pixels at the display's top-left corner, so
@@ -11,15 +11,15 @@
 // Instrument key: the element tag, plus "#<n>" when the instrument's url has Index=<n> (cockpits with two
 // of the same instrument). The table may hold either form; the exact key wins.
 (function () {
-  if (window.__cockpitLinkHook) return;
-  window.__cockpitLinkHook = 1;
+  if (window.__cockpitCastHook) return;
+  window.__cockpitCastHook = 1;
 
   // Built-in table, filled in by build-hook.mjs from config/displays.json. Replaced by the host's table.
   var DISPLAYS = /*__DISPLAYS__*/ {};
   var HOST_URL = 'ws://127.0.0.1:' + /*__PORT__*/ 8800 + '/hook';
   var VERSION = /*__VERSION__*/ 'dev';
   var INST_URL = '/pages/vcockpit/instruments/';
-  var MARK_CLASS = '__cockpit_link_marker';
+  var MARK_CLASS = '__cockpitcast_marker';
 
   function keyOf(el) {
     var tag = el.tagName.toLowerCase();
