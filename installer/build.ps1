@@ -27,7 +27,11 @@ function Find-Tool($name, $candidates) {
   throw "$name not found"
 }
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
-$cmake = Find-Tool 'cmake.exe' @("$vs\Common7\IDE\CommonExtensionTools\Microsoft\CMake\CMake\bin\cmake.exe", (Get-ChildItem -Recurse -Filter cmake.exe $vs -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName))
+# CMake: on the PATH (CI machines), at Visual Studio's usual place, or anywhere in the VS folder (Build Tools).
+$cmake = (Get-Command cmake.exe -ErrorAction SilentlyContinue).Source
+if (-not $cmake) { $cmake = "$vs\Common7\IDE\CommonExtensionTools\Microsoft\CMake\CMake\bin\cmake.exe" }
+if (-not (Test-Path $cmake)) { $cmake = Get-ChildItem -Recurse -Filter cmake.exe $vs -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName }
+if (-not $cmake) { throw 'cmake.exe not found' }
 $iscc = Find-Tool 'ISCC.exe' @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")
 $node = (Get-Command node.exe).Source
 $flutter = Find-Tool 'flutter.bat' @("$env:USERPROFILE\Tools\flutter\bin\flutter.bat")

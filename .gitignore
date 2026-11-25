@@ -16,3 +16,6 @@ docs/client-hardware.md
 # Installer builds
 installer/stage/
 installer/output/
+
+# Landing page: screenshots are copied in from docs/images when it is published
+site/images/

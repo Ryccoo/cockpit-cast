@@ -1,0 +1,154 @@
+# Builds a release when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0) and attaches:
+#   CockpitLink-Host-Setup.exe            sim PC (Windows)
+#   CockpitLink-Client-Setup.exe          display PCs (Windows), and CockpitLink-Client-windows.zip
+#   CockpitLink-Client-linux-x64.tar.gz   Linux PCs
+#   CockpitLink-Client-linux-arm64.tar.gz Raspberry Pi 4/5 (64-bit OS)
+#   CockpitLink-Client-android.apk        Android
+#   SHA256SUMS.txt                        checksums (the updater checks downloads against them)
+# The file names have no version in them, so .../releases/latest/download/<name> always gets the latest.
+# The tag must match the version in host/package.json and client/pubspec.yaml.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.50.1
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Check the tag against the version in the code
+        run: |
+          host=$(node -p "require('./host/package.json').version")
+          client=$(grep '^version:' client/pubspec.yaml | sed 's/version: *//; s/+.*//')
+          tag="${GITHUB_REF_NAME#v}"
+          echo "host $host, client $client, tag $tag"
+          [ "$host" = "$client" ] || { echo "host and client versions differ"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$tag" != "$host" ]; then echo "tag v$tag does not match version $host"; exit 1; fi
+          echo "version=$host" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: Inno Setup
+        shell: pwsh
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Build (C++, client, installers)
+        shell: pwsh
+        run: ./installer/build.ps1
+      # Code signing goes here once a certificate service is set up (SignPath or Azure Trusted Signing):
+      # sign installer/stage/** binaries before the installers are compiled, then the installers.
+      - name: Collect
+        shell: pwsh
+        run: |
+          $v = '${{ needs.version.outputs.version }}'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "installer/output/CockpitLink-Host-$v-Setup.exe" dist/CockpitLink-Host-Setup.exe
+          Copy-Item "installer/output/CockpitLink-Client-$v-Setup.exe" dist/CockpitLink-Client-Setup.exe
+          Copy-Item "installer/output/CockpitLink-Client-$v-windows.zip" dist/CockpitLink-Client-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+
+  linux:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build tools
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+      - name: Flutter (from git: works on x64 and arm64)
+        run: |
+          git clone --depth 1 -b "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      - name: Build
+        working-directory: client
+        run: |
+          flutter config --enable-linux-desktop
+          flutter build linux --release
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp LICENSE installer/THIRD-PARTY-NOTICES.txt client/build/linux/${{ matrix.arch }}/release/bundle/
+          tar -czf dist/CockpitLink-Client-linux-${{ matrix.arch }}.tar.gz -C client/build/linux/${{ matrix.arch }}/release bundle --transform 's,^bundle,cockpit-link,'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*
+
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: Build
+        working-directory: client
+        run: flutter build apk --release
+      - name: Collect
+        run: mkdir -p dist && cp client/build/app/outputs/flutter-apk/app-release.apk dist/CockpitLink-Client-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*
+
+  release:
+    needs: [version, windows, linux, android]
+    # The Windows build is required; a failed Linux or Android build only leaves its file out.
+    if: ${{ !cancelled() && needs.windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --title "Cockpit Link $VERSION" --generate-notes --verify-tag
+          fi

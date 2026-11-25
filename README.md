@@ -87,7 +87,7 @@ monitor page.
 
 ## Install (Windows)
 
-Download from the Releases page:
+Download from [cockpitlink.ludvigh.dev](https://cockpitlink.ludvigh.dev) or the [Releases page](https://github.com/Ryccoo/cockpit-link/releases/latest):
 
 - **Sim PC:** `CockpitLink-Host-<version>-Setup.exe`. It installs the host for your Windows user (no admin
   rights needed), with its own copy of Node.js, so there is nothing else to install. Close MSFS first:
@@ -349,6 +349,8 @@ keys. For example:
 | `capture/` | capture.dll (C++), plus `panel-sim.exe`, a D3D12 stand-in for the sim, for testing |
 | `injector/` | `cockpit-link-injector.exe` (C++), plus a fake sim and a test DLL |
 | `tray/` | `cockpit-link-tray.exe` (C++): the tray icon. `npm start` starts it; installed copies start the host from it (launcher, no console window) |
+| `site/` | The landing page (cockpitlink.ludvigh.dev), published by `.github/workflows/pages.yml` |
+| `.github/workflows/` | `release.yml` (builds installers and clients on a version tag), `pages.yml` (website), `cla.yml` (CLA bot) |
 | `installer/` | Inno Setup scripts and `build.ps1`: builds the host and client installers and the portable client zip |
 | `hook/` | Community hook source; build and install scripts |
 | `host/` | Host (Node.js): `src/` modules, `public/` web pages, `tools/` test tools, `defaults/` layouts and aircraft profiles |
