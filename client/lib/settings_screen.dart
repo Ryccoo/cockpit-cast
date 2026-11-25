@@ -7,6 +7,7 @@
 // "Save and start" saves, then opens the windows (this one, plus one more app copy per extra window).
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 
@@ -92,7 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final host = parts.first, port = parts.length > 1 ? (int.tryParse(parts[1]) ?? defaultPort) : defaultPort;
     if (conn != null && conn!.host == host && conn!.port == port) return;
     conn?.dispose();
-    conn = HostConnection(host: host, port: port, clientName: '${s.clientName} (settings)')..start();
+    conn = HostConnection(host: host, port: port, clientName: '${s.clientName} (settings)', info: {'device': s.clientName, 'window': 'Settings', 'role': 'settings', 'version': appVersion, 'platform': Platform.operatingSystem})..start();
     conn!.addListener(() => mounted ? setState(() {}) : null);
     setState(() {});
   }

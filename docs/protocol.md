@@ -84,7 +84,10 @@ Rules for a capture source (capture.dll):
 Client to host:
 
 ```json
-{ "type": "hello", "client": "Cockpit Pi left", "protocol": 1 }
+{ "type": "hello", "client": "Cockpit Pi left", "protocol": 1,
+  "device": "Cockpit Pi left", "window": "Window 1", "role": "display", "shows": "screen 1: Six-pack",
+  "version": "0.2.1", "platform": "linux" }   // all but client and protocol: optional (the monitor's app list)
+{ "type": "shows", "shows": "screen 1: PFD" }   // what this window shows changed
 { "type": "subscribe", "display": "pfd", "maxFps": 30 }
 { "type": "unsubscribe", "display": "pfd" }
 { "type": "installUpdate" }   // update banner in the editor or monitor; accepted from the sim PC only
@@ -127,6 +130,9 @@ Client to host:
 { "type": "resetLayouts" }
 { "type": "subscribeCatalog" }   // the editor: every display seen, by aircraft (sent now and on change)
 { "type": "unsubscribeCatalog" } // the editor tab is hidden: no catalog, no picture grabs
+{ "type": "subscribeApps" }      // the monitor: connected apps, now and every 2 s ("apps" below)
+{ "type": "unsubscribeApps" }
+{ "type": "appAction", "id": 3, "action": "pause" }   // or "resume", "identify" (id from "apps")
 { "type": "setScreens", "screens": [ { "id": "1", "name": "Screen 1", "glass": "pfd", "steam": "six-pack" } ],
   "aircraft": { "asobo_tbm930": { "2": { "kind": "layout", "id": "tbm-panel" } } } }   // aircraft: optional, left out = keep
 ```
@@ -149,6 +155,7 @@ Host to client:
                             "thumbAt": 1764076830175, "aircraft": ["asobo_sr22_g3x", "carenado_pa34"] } } }
 ```
 
+- `apps` (only after `subscribeApps`): `{ "type": "apps", "list": [ { "id", "name", "window", "kind" ("app" or "settings"), "shows", "address", "version", "platform", "paused", "displays", "gauges", "fps", "connectedSec", "canPause" } ], "apps": 2, "paused": 1, "pages": 1 }`. A paused app gets no frames and no gauge data, and counts for nothing in what is captured or read from the sim; the host tells it `{ "type": "paused", "paused": true }` (and `false` on resume) and remembers the pause by device and window in `paused-apps.json`. `identify` sends the app `{ "type": "identify", "seconds": 8 }`: it shows its name on screen.
 - `catalog` (only after `subscribeCatalog`): `aircraft` is the loaded aircraft while the sim runs, else null; `present` the displays in its cockpit; `aircraftList` every aircraft seen with its displays, most recently flown first (from the instrument log and the learned displays). `thumbAt` is when the saved picture was taken (null: none yet); fetch it from `/thumb/<id>.jpg`.
 
 - `dataVars` comes once after `subscribeData`; every `data` message has the values in that order (keys and

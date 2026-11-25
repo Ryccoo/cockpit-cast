@@ -1,7 +1,7 @@
 name: cockpitcast
 description: "CockpitCast client: shows MSFS cockpit displays and steam gauges streamed from the CockpitCast host."
 publish_to: 'none'
-version: 0.2.0+3
+version: 0.2.1+4
 
 environment:
   sdk: ^3.14.0

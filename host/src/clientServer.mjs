@@ -363,7 +363,7 @@ export class ClientServer {
     }
     const watchers = only ? [only] : [...this.clients].filter((c) => c.watchApps);
     if (!watchers.length) return;
-    const text = JSON.stringify({ type: 'apps', apps: this.apps(), ...this.appsInfo() });
+    const text = JSON.stringify({ type: 'apps', list: this.apps(), ...this.appsInfo() });
     for (const w of watchers) if (w.ws.readyState === 1) w.ws.send(text);
   }
 

@@ -103,7 +103,17 @@ Frame? parseFrame(Uint8List b) {
   return Frame(id, seq, hostTimeMs, width, height, Uint8List.sublistView(b, 21 + idLen));
 }
 
-String helloMessage(String clientName) => jsonEncode({'type': 'hello', 'client': clientName, 'protocol': protocolVersion});
+/// [info]: what the host lists on its monitor page (device, window, shows, role, version, platform).
+String helloMessage(String clientName, [Map<String, String?> info = const {}]) => jsonEncode({
+      'type': 'hello',
+      'client': clientName,
+      'protocol': protocolVersion,
+      for (final e in info.entries)
+        if (e.value != null) e.key: e.value,
+    });
+
+/// What this window shows now (e.g. "screen 1: PFD"), for the host's list of apps.
+String showsMessage(String shows) => jsonEncode({'type': 'shows', 'shows': shows});
 
 String subscribeMessage(String display, int maxFps) => jsonEncode({'type': 'subscribe', 'display': display, 'maxFps': maxFps});
 

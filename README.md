@@ -331,7 +331,7 @@ keys. For example:
 
 | Page or API | What |
 |---|---|
-| `http://localhost:8800/` | Monitor: live displays, sim, capture and instrument state |
+| `http://localhost:8800/` | Monitor: live displays, sim, capture, instruments, and the connected display apps (Identify shows an app's name on its screen; Pause stops sending to it, so nothing is captured for it, until Resume) |
 | `http://localhost:8800/editor` | Layout and screen editor |
 | `http://localhost:8800/api/status` | Full state as JSON (sim PC only) |
 | `POST /api/inject` | Inject capture.dll now (when `autoInject` is off) |

@@ -88,12 +88,23 @@ class DisplayFeed extends ChangeNotifier {
 }
 
 class HostConnection extends ChangeNotifier {
-  HostConnection({required this.host, required this.port, required this.clientName, this.maxFps = 30});
+  HostConnection({required this.host, required this.port, required this.clientName, this.maxFps = 30, this.info = const {}});
 
   final String host;
   final int port;
   final String clientName;
   int maxFps;
+
+  /// Sent with hello: device, window, role ('display' or 'settings'), version, platform.
+  final Map<String, String?> info;
+
+  /// Paused from the host's monitor page: the host sends nothing until resumed.
+  bool paused = false;
+
+  /// Identify from the host's monitor page: show this app's name on screen until then.
+  DateTime? identifyUntil;
+
+  String? _shows;
 
   LinkState state = LinkState.disconnected;
   String? hostName;
@@ -121,6 +132,13 @@ class HostConnection extends ChangeNotifier {
 
   /// Feed for a display; created on first use. Call [want] to actually receive frames.
   DisplayFeed feed(String id) => _feeds.putIfAbsent(id, () => DisplayFeed(id));
+
+  /// What this window shows, for the host's list of apps (sent when it changes).
+  void setShows(String shows) {
+    if (shows == _shows) return;
+    _shows = shows;
+    _send(showsMessage(shows));
+  }
 
   /// Sets which displays this client wants frames for.
   void want(Iterable<String> ids) {
@@ -188,10 +206,11 @@ class HostConnection extends ChangeNotifier {
     if (_closed || _channel != ch) return;
     state = LinkState.connected;
     lastError = null;
+    paused = false;
     _retryDelayMs = 500;
     notifyListeners();
     _sub = ch.stream.listen(_onMessage, onDone: () => _onDown('Connection closed'), onError: (e) => _onDown('Connection lost'));
-    _send(helloMessage(clientName));
+    _send(helloMessage(clientName, {...info, 'shows': _shows}));
     for (final id in _wanted) {
       _send(subscribeMessage(id, maxFps));
     }
@@ -225,6 +244,11 @@ class HostConnection extends ChangeNotifier {
         gaugeValues.setRefs({if (status.vfe != null) 'vfe': status.vfe!, if (status.vno != null) 'vno': status.vno!});
       case 'error':
         lastError = msg['message'] as String?;
+      case 'paused':
+        paused = msg['paused'] == true;
+      case 'identify':
+        identifyUntil = DateTime.now().add(Duration(seconds: (msg['seconds'] as num?)?.toInt() ?? 8));
+        Timer(Duration(seconds: (msg['seconds'] as num?)?.toInt() ?? 8), notifyListeners);
       case 'update': // the host is installing its update: the display PCs update too
         Updater.instance.updateFromHost();
         return;

@@ -7,11 +7,13 @@
 // Tap anywhere for the overlay (status, back).
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import 'about.dart';
 import 'discovery.dart';
 import 'display_view.dart';
 import 'host_connection.dart';
@@ -68,7 +70,13 @@ class _DisplaysScreenState extends State<DisplaysScreen> {
 
   void _connect(String host, int port) {
     setState(() {
-      conn = HostConnection(host: host, port: port, clientName: s.clientName, maxFps: s.maxFps)..start();
+      conn = HostConnection(
+        host: host,
+        port: port,
+        clientName: s.clientName,
+        maxFps: s.maxFps,
+        info: {'device': s.clientName, 'window': 'Window ${s.outputIndex + 1}', 'role': 'display', 'version': appVersion, 'platform': Platform.operatingSystem},
+      )..start();
     });
   }
 
@@ -152,6 +160,15 @@ class _DisplaysScreenState extends State<DisplaysScreen> {
   }
 
   Widget _content(BuildContext context, HostConnection c) {
+    final identify = c.identifyUntil != null && DateTime.now().isBefore(c.identifyUntil!);
+    // Paused from the host: draw nothing (the host sends nothing meanwhile).
+    if (c.paused) {
+      return Stack(fit: StackFit.expand, children: [
+        _message('Paused from the sim PC\n(CockpitCast monitor page: Resume)'),
+        if (identify) _identifyCard(c),
+        if (overlay) _overlayBar(context, c),
+      ]);
+    }
     // Decide what to show, then keep the host subscriptions in line with it.
     List<String> displays = const [];
     GaugeLayout? layout;
@@ -182,6 +199,11 @@ class _DisplaysScreenState extends State<DisplaysScreen> {
         if (g.type == 'glass' && '${g.options['display'] ?? ''}'.isNotEmpty) '${g.options['display']}',
     ];
     c.want({...displays, ...glassIds});
+    c.setShows(switch (o.mode) {
+      ContentMode.screen => 'screen ${o.screen}${layout != null ? ': ${layout.name}' : displays.isNotEmpty ? ': ${displays.map((id) => _nameOf(c, id) ?? id).join(', ')}' : ''}',
+      ContentMode.displays => displays.map((id) => _nameOf(c, id) ?? id).join(', '),
+      ContentMode.layout => 'layout ${layout?.name ?? o.layoutId}',
+    });
     c.wantData(layout != null && layout.gauges.any((g) => g.type != 'glass'));
 
     Widget body;
@@ -198,8 +220,21 @@ class _DisplaysScreenState extends State<DisplaysScreen> {
       body = _message(missing ?? waiting ?? _waitingText(c));
     }
     if (s.hideCursor) body = MouseRegion(cursor: SystemMouseCursors.none, child: body);
-    return Stack(fit: StackFit.expand, children: [body, if (overlay) _overlayBar(context, c)]);
+    return Stack(fit: StackFit.expand, children: [body, if (identify) _identifyCard(c), if (overlay) _overlayBar(context, c)]);
   }
+
+  /// Large name card, from Identify on the host's monitor page.
+  Widget _identifyCard(HostConnection c) => Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 24),
+          decoration: BoxDecoration(color: const Color(0xFF1D2A22), border: Border.all(color: const Color(0xFF3BA55C), width: 3), borderRadius: BorderRadius.circular(16)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(s.clientName, style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('Window ${s.outputIndex + 1}  ·  ${o.mode == ContentMode.screen ? 'screen ${o.screen}' : o.mode.name}', style: const TextStyle(color: Color(0xFFB8D8C4), fontSize: 24)),
+          ]),
+        ),
+      );
 
   Widget _message(String text) => Center(
         child: Padding(

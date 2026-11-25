@@ -46,6 +46,10 @@
   <a href="https://ko-fi.com/richardludvigh" target="_blank" rel="noopener" title="CockpitCast is free and open source. Support it on Ko-fi." style="margin-left:auto;color:#e06c75">&#9829; Support</a>
 </header>
 <main id="tiles"><div class="empty">Waiting for displays. Start the fake capture tool or capture.dll.</div></main>
+<section class="inst" id="appsBox">
+  <h2>Display apps <span id="appsCount"></span></h2>
+  <div id="apps"><p class="note">Loading…</p></div>
+</section>
 <section class="inst">
   <h2>Instruments in this cockpit <span id="instAircraft"></span> <button id="instRefresh">Refresh</button></h2>
   <div id="inst"><p class="note">Loading…</p></div>
@@ -66,12 +70,14 @@ function connect() {
     for (const id of [...views.keys()]) removeView(id);
     setText('link', 'connected', true);
     ws.send(JSON.stringify({ type: 'hello', client: 'Debug monitor', protocol: 1 }));
+    if (!document.hidden) ws.send(JSON.stringify({ type: 'subscribeApps' }));
   };
   ws.onclose = () => { setText('link', 'reconnecting', false); setTimeout(connect, 1500); };
   ws.onmessage = (ev) => (typeof ev.data === 'string' ? onText(JSON.parse(ev.data)) : onFrame(ev.data));
 }
 
 function onText(m) {
+  if (m.type === 'apps') renderApps(m);
   if (m.type === 'welcome') document.getElementById('host').textContent = `${m.host} (v${m.version})`;
   if (m.type === 'status') {
     window.showUpdate?.(m.update, (o) => ws?.readyState === 1 && ws.send(JSON.stringify(o)));
@@ -150,6 +156,35 @@ function setText(id, text, ok) {
   el.className = ok ? 'ok' : 'bad';
 }
 
+// ---- display apps: every client app connected to the host, with identify and pause ----
+// Pausing an app stops everything sent to it, so nothing is captured or read from the sim for it alone;
+// the host remembers it (device and window) until resumed.
+function renderApps(m) {
+  const box = document.getElementById('apps');
+  const pages = m.pages ? ` · plus ${m.pages} editor or monitor page${m.pages === 1 ? '' : 's'}` : '';
+  document.getElementById('appsCount').textContent = `· ${m.apps} connected${m.paused ? `, ${m.paused} paused` : ''}${pages}`;
+  if (!m.list.length) { box.innerHTML = '<p class="note">No client apps connected. Start the CockpitCast client on a display PC; it finds this host by itself.</p>'; return; }
+  const ago = (s) => s < 90 ? `${s} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`;
+  box.innerHTML = `<table><thead><tr><th>Device</th><th>Window</th><th>Shows</th><th>Receiving</th><th>Address</th><th>Version</th><th></th></tr></thead><tbody>${
+    m.list.map((a) => {
+      const recv = a.paused ? '<span class="bad">paused</span>'
+        : [a.displays.length ? `${esc(a.displays.join(', '))} · ${a.fps} fps` : '', a.gauges ? 'gauge data' : ''].filter(Boolean).join(' + ') || '<span class="dim">nothing</span>';
+      const kind = a.kind === 'settings' ? ' <span class="dim">(settings page)</span>' : '';
+      const actions = a.canPause
+        ? `<button data-app="${a.id}" data-a="identify" title="Show this app's name on its screen for a few seconds">Identify</button> <button data-app="${a.id}" data-a="${a.paused ? 'resume' : 'pause'}" title="${a.paused ? 'Start sending to it again' : 'Send it nothing (no capture for it), until resumed'}">${a.paused ? 'Resume' : 'Pause'}</button>`
+        : '';
+      return `<tr><td>${esc(a.name)}${kind}</td><td>${esc(a.window ?? '')}</td><td>${esc(a.shows ?? '')}</td><td>${recv}</td><td class="dim">${esc(a.address)}</td><td class="dim">${esc(a.version ?? 'old')}${a.platform ? ' · ' + esc(a.platform) : ''} · ${ago(a.connectedSec)}</td><td>${actions}</td></tr>`;
+    }).join('')
+  }</tbody></table>
+  <p class="note"><b>Identify</b> shows the app's name on its screen. <b>Pause</b> sends it nothing, so nothing is captured just for it; it shows "Paused" and stays paused (also after restarts) until resumed here. Apps marked <i>old</i> pause too, but keep their last picture on screen.</p>`;
+}
+document.getElementById('apps').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-app]');
+  if (!b || ws?.readyState !== 1) return;
+  b.disabled = true;
+  ws.send(JSON.stringify({ type: 'appAction', id: Number(b.dataset.app), action: b.dataset.a }));
+});
+
 // ---- instruments in this cockpit and the displays learned from them (sim PC only) ----
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 async function loadInstruments() {
@@ -205,7 +240,10 @@ loadInstruments();
 setInterval(loadInstruments, 10000);
 
 connect();
-document.addEventListener('visibilitychange', syncTiles);
+document.addEventListener('visibilitychange', () => {
+  syncTiles();
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ type: document.hidden ? 'unsubscribeApps' : 'subscribeApps' }));
+});
 </script>
 </body>
 </html>
