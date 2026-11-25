@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build tools
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
-      - name: Flutter (from git: works on x64 and arm64)
+      - name: Flutter (from git, works on x64 and arm64)
         run: |
           git clone --depth 1 -b "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
           echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
