@@ -122,7 +122,8 @@ Client to host:
 { "type": "resetLayouts" }
 { "type": "subscribeCatalog" }   // the editor: every display seen, by aircraft (sent now and on change)
 { "type": "unsubscribeCatalog" } // the editor tab is hidden: no catalog, no picture grabs
-{ "type": "setScreens", "screens": [ { "id": "1", "name": "Screen 1", "glass": "pfd", "steam": "six-pack" } ] }
+{ "type": "setScreens", "screens": [ { "id": "1", "name": "Screen 1", "glass": "pfd", "steam": "six-pack" } ],
+  "aircraft": { "asobo_tbm930": { "2": { "kind": "layout", "id": "tbm-panel" } } } }   // aircraft: optional, left out = keep
 ```
 
 Host to client:
@@ -132,7 +133,9 @@ Host to client:
 { "type": "data", "t": 1764000000000, "v": [105.2, -2.5, 0.0, 4512.0] }
 { "type": "layouts", "layouts": [ { "id": "six-pack", "name": "Six-pack", "width": 1200, "height": 800, "gauges": [] } ] }
 { "type": "screens", "screens": [ { "id": "1", "name": "Screen 1", "mode": "glass", "show": { "kind": "display", "id": "pfd" } },
-                                  { "id": "2", "name": "Screen 2", "mode": "steam", "show": { "kind": "layout", "id": "engine-radios" } } ] }
+                                  { "id": "2", "name": "Screen 2", "mode": "steam", "show": { "kind": "layout", "id": "engine-radios" }, "custom": false } ],
+  "aircraft": "asobo_c152", "perAircraft": { "asobo_tbm930": { "2": { "kind": "layout", "id": "tbm-panel" } } },
+  "knownAircraft": ["asobo_c152", "asobo_tbm930"] }
 { "type": "layoutSaved", "id": "six-pack" }
 { "type": "catalog", "simRunning": true, "aircraft": "asobo_sr22_g3x", "present": ["g3x-pfd-1", "gtn750"],
   "aircraftList": [ { "name": "asobo_sr22_g3x", "lastSeen": "2026-11-25T13:20:30Z", "displays": ["g3x-pfd-1", "gtn750"] },
@@ -155,6 +158,9 @@ Host to client:
   10 s (or, if the hook reports nothing, after `steamAfterSec`, 30 s). After an aircraft change, and before
   the first decision, the mode is `waiting`. `show.kind` is
   `display` (subscribe to that display), `layout` (subscribe to data, draw that layout) or `waiting`.
+  Per-aircraft choices (`perAircraft`, by aircraft folder name): while that aircraft is loaded, a screen
+  with a choice shows it (`custom: true`) whatever the mode, and its glass display is not given to another
+  screen. Clients read only `screens`; `aircraft`, `perAircraft` and `knownAircraft` are for the editor.
 
 ### Binary messages (frames)
 

@@ -18,6 +18,11 @@
 //   screens show "waiting".
 //   cfg.screenMode 'glass' or 'steam' forces a mode (testing, or aircraft the detection gets wrong).
 //
+// Per-aircraft choices: for any aircraft (by its folder name, e.g. asobo_tbm930), a screen can be set
+// to always show one layout or one glass display. That screen then skips the glass/steam detection
+// while that aircraft is loaded; the other screens keep the defaults. Glass displays chosen this way
+// are not handed out again to the screens that fill themselves in automatically.
+//
 // Emits 'change' with the list whenever any screen's content changes.
 
 import { EventEmitter } from 'node:events';
@@ -37,10 +42,13 @@ export class Screens extends EventEmitter {
     // user saved in the editor (dataDir/screens.json).
     this.file = path.join(cfg.dataDir, 'screens.json');
     this.assignments = cfg.screens.map((s) => ({ ...s }));
+    // aircraft -> { screen id -> { kind: 'layout' | 'display', id } }
+    this.perAircraft = {};
     try {
       if (fs.existsSync(this.file)) {
-        const saved = JSON.parse(fs.readFileSync(this.file, 'utf8')).screens;
-        if (Array.isArray(saved) && saved.length) this.assignments = saved.map(cleanScreen);
+        const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+        if (Array.isArray(saved.screens) && saved.screens.length) this.assignments = saved.screens.map(cleanScreen);
+        this.perAircraft = cleanPerAircraft(saved.aircraft, this.assignments);
       }
     } catch (e) {
       log.warn(`cannot read ${this.file}: ${e.message}`);
@@ -92,7 +100,7 @@ export class Screens extends EventEmitter {
       this.mode = mode;
     }
     const list = this.list();
-    const json = JSON.stringify(list);
+    const json = JSON.stringify([list, this.sim.status().aircraft ?? null]);
     if (json === this.last) return;
     this.last = json;
     this.emit('change', list);
@@ -100,33 +108,52 @@ export class Screens extends EventEmitter {
 
   list() {
     const present = this.hook.present();
-    // Assigned displays the cockpit has.
-    const pick = this.assignments.map((s) => (s.glass && present.has(s.glass) ? s.glass : null));
+    const aircraft = this.sim.status().aircraft ?? null;
+    const own = (aircraft && this.perAircraft[aircraft]) || {};
+    // Assigned displays the cockpit has (screens with a per-aircraft choice take no part).
+    const pick = this.assignments.map((s) => (!own[s.id] && s.glass && present.has(s.glass) ? s.glass : null));
     // Glass mode: screens without one take the cockpit's remaining primary displays.
     if (this.mode === 'glass') {
-      const used = new Set(pick.filter(Boolean));
+      const used = new Set([...pick.filter(Boolean), ...Object.values(own).filter((o) => o.kind === 'display').map((o) => o.id)]);
       const pool = [...present].filter((id) => !used.has(id) && this.registry.get(id)?.primary).sort((a, b) => rank(this.registry.get(a)) - rank(this.registry.get(b)) || a.localeCompare(b));
-      for (let i = 0; i < pick.length; i++) if (!pick[i]) pick[i] = pool.shift() ?? null;
+      for (let i = 0; i < pick.length; i++) if (!pick[i] && !own[this.assignments[i].id]) pick[i] = pool.shift() ?? null;
     }
     return this.assignments.map((s, i) => {
       let show = { kind: 'waiting' };
-      if (pick[i]) show = { kind: 'display', id: pick[i] };
+      if (own[s.id]) show = { ...own[s.id] };
+      else if (pick[i]) show = { kind: 'display', id: pick[i] };
       else if (this.mode !== 'waiting' && s.steam) show = { kind: 'layout', id: s.steam };
-      return { id: s.id, name: s.name, mode: this.mode, show, glass: s.glass ?? null, steam: s.steam ?? null };
+      return { id: s.id, name: s.name, mode: this.mode, show, custom: !!own[s.id], glass: s.glass ?? null, steam: s.steam ?? null };
     });
+  }
+
+  /// Extra fields for the 'screens' message (the editor uses them; clients only read 'screens'):
+  /// the loaded aircraft, the per-aircraft choices, and every aircraft the host knows of.
+  extra() {
+    const aircraft = this.sim.status().aircraft ?? null;
+    const known = new Set(Object.keys(this.perAircraft));
+    for (const name of Object.keys(this.instruments?.byAircraft ?? {})) known.add(name);
+    for (const d of this.registry.all()) for (const name of d.aircraft ?? []) known.add(name);
+    if (aircraft) known.add(aircraft);
+    return { aircraft, perAircraft: this.perAircraft, knownAircraft: [...known].sort() };
   }
 
   /// Replace the screen list (from the editor): any number of screens, each with an id (what a client
   /// is started with: --screen <id>), a name, a glass display and a steam layout. Saved to disk.
-  setAssignments(list) {
+  /// perAircraft (optional; left out = keep): { aircraft: { screen id: { kind: 'layout' | 'display', id } } }.
+  setAssignments(list, perAircraft) {
     if (!Array.isArray(list) || list.length < 1 || list.length > 16) throw new Error('need 1 to 16 screens');
     const next = list.map(cleanScreen);
     const ids = new Set(next.map((s) => s.id));
     if (ids.size !== next.length) throw new Error('screen ids must be unique');
     this.assignments = next;
+    this.perAircraft = cleanPerAircraft(perAircraft === undefined ? this.perAircraft : perAircraft, next);
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    fs.writeFileSync(this.file, JSON.stringify({ screens: this.assignments.map(({ id, name, glass, steam }) => ({ id, name, glass, steam })) }, null, 2));
+    const saved = { screens: this.assignments.map(({ id, name, glass, steam }) => ({ id, name, glass, steam })), aircraft: this.perAircraft };
+    fs.writeFileSync(this.file, JSON.stringify(saved, null, 2));
     log.info(`screens: ${this.assignments.map((a) => `${a.id}=${a.glass ?? '-'}/${a.steam ?? '-'}`).join(' ')}`);
+    for (const [a, m] of Object.entries(this.perAircraft)) log.info(`  ${a}: ${Object.entries(m).map(([sid, o]) => `${sid}=${o.kind} ${o.id}`).join(' ')}`);
+    this.last = ''; // the editor needs the new choices even if no screen changes now
     this.update();
   }
 
@@ -138,8 +165,8 @@ export class Screens extends EventEmitter {
 // Order for filling screens: PFD-like first, then MFD-like, then other primary displays; #1 before #2.
 function rank(d) {
   const key = `${d?.id ?? ''} ${d?.tags?.[0] ?? ''}`;
-  const n = Number(/#(d+)/.exec(key)?.[1] ?? 0);
-  const kind = /pfd/.test(key) ? 0 : /mfd|nd/.test(key) ? 1 : /eicas|ecam|ead/.test(key) ? 2 : 3;
+  const n = Number(/#(\d+)/.exec(key)?.[1] ?? 0);
+  const kind = /pfd/.test(key) ? 0 : /mfd|nd\b/.test(key) ? 1 : /eicas|ecam|ead/.test(key) ? 2 : 3;
   return kind * 100 + n;
 }
 
@@ -148,4 +175,23 @@ function cleanScreen(s) {
   if (!/^[A-Za-z0-9_-]{1,32}$/.test(id)) throw new Error(`screen id '${id}' must be 1-32 chars: letters, digits, - or _`);
   const str = (v) => (v === null || v === undefined || v === '' ? null : String(v).slice(0, 64));
   return { id, name: String(s.name ?? `Screen ${id}`).slice(0, 60), glass: str(s.glass), steam: str(s.steam) };
+}
+
+// Per-aircraft choices, keeping only screens that exist and well-formed entries.
+function cleanPerAircraft(v, screens) {
+  const ids = new Set(screens.map((s) => s.id));
+  const out = {};
+  if (!v || typeof v !== 'object') return out;
+  for (const [aircraft, m] of Object.entries(v).slice(0, 500)) {
+    const name = String(aircraft).trim().slice(0, 128);
+    if (!name || !m || typeof m !== 'object') continue;
+    const entry = {};
+    for (const [sid, o] of Object.entries(m)) {
+      if (!ids.has(sid) || !o || (o.kind !== 'layout' && o.kind !== 'display')) continue;
+      const id = String(o.id ?? '').slice(0, 64);
+      if (id) entry[sid] = { kind: o.kind, id };
+    }
+    if (Object.keys(entry).length) out[name] = entry;
+  }
+  return out;
 }

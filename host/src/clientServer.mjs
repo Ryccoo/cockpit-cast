@@ -139,7 +139,7 @@ export class ClientServer {
     this.send(c, { type: 'displays', displays: this.hub.list() });
     this.send(c, { type: 'status', ...this.getStatus() });
     if (this.layouts) this.send(c, { type: 'layouts', layouts: this.layouts.list() });
-    if (this.screens) this.send(c, { type: 'screens', screens: this.screens.list() });
+    if (this.screens) this.send(c, { type: 'screens', screens: this.screens.list(), ...this.screens.extra() });
 
     ws.on('message', (data, isBinary) => {
       if (isBinary) return;
@@ -232,7 +232,7 @@ export class ClientServer {
         break;
       case 'setScreens':
         try {
-          this.screens?.setAssignments(msg.screens);
+          this.screens?.setAssignments(msg.screens, msg.aircraft);
         } catch (e) {
           this.send(c, { type: 'error', message: `screens not saved: ${e.message}` });
         }
@@ -319,7 +319,7 @@ export class ClientServer {
   }
 
   broadcastScreens(screens) {
-    this.broadcast({ type: 'screens', screens });
+    this.broadcast({ type: 'screens', screens, ...(this.screens?.extra() ?? {}) });
   }
 
   // Which displays anyone is watching, with the highest fps asked for. Drives capture on demand.

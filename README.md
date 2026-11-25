@@ -283,6 +283,10 @@ Open `http://<sim PC>:8800/editor` in a browser. It is also linked from the moni
   pick the part, for example the ADF frequency from a radio display next to your steam gauges.
 - **Screens.** Add or remove screens (1 to 16), name them, and pick for each one the glass display and
   the steam layout it shows. A client window set to *Screen N* follows these choices.
+- **Per-aircraft screens.** Under *Screens*, choose an aircraft in *For* and give any screen its own
+  layout or glass display for that aircraft, for example a layout made just for the TBM 930 on screen 2.
+  Whenever that aircraft is loaded, those screens show it straight away. Screens left on *Default*
+  keep the automatic glass/steam choice. Every aircraft you have flown is in the list.
 - **Preview all screens** (`/editor#preview`) shows every screen at once.
 
 Airspeed arcs come from the sim (stall speeds, Vne). The sim has no values for Vfe and Vno: these come from
