@@ -1,7 +1,7 @@
 name: cockpit_link
 description: "Cockpit Link client: shows MSFS cockpit displays and steam gauges streamed from the Cockpit Link host."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ^3.14.0
