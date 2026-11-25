@@ -3,7 +3,7 @@
 //   Windows, installed with the Setup program: downloads CockpitLink-Client-Setup.exe, checks it against
 //   the release's SHA256SUMS.txt, runs it silently and quits; the installer starts the app again with
 //   the same command line (installer/client.iss, /UPDATE=1 /ARGS=...).
-//   Elsewhere (Linux, Android, the zip): the Settings page shows that a new version exists, with a link.
+//   Elsewhere (Linux, macOS, the zip): the Settings page shows that a new version exists, with a link.
 //
 // When: at start (installs straight away if "Update automatically" is on), every 6 hours (only noted),
 // when the user taps "Update now", and when the host installs its own update (the host's "update"

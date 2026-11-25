@@ -2,7 +2,7 @@
 
 **Put your sim's cockpit displays on real screens.** Cockpit Link streams the glass displays of
 Microsoft Flight Simulator 2024 (for example the G1000 PFD and MFD) from the sim PC to small monitors
-driven by another device on your network: a mini PC, a Raspberry Pi, a tablet or a phone. For aircraft
+driven by another device on your network: a mini PC or a Raspberry Pi. For aircraft
 with classic round dials it draws the steam gauges itself, from live sim data.
 
 - **No pop-out windows.** The displays come straight out of the sim's own rendering, so you do not
@@ -83,7 +83,8 @@ monitor page.
   works well.
 - **Linux PC or Raspberry Pi 4/5** (64-bit OS, desktop session).
 - **macOS.**
-- **Android** tablet or phone.
+
+Android and iOS apps are planned for later (app stores).
 
 ## Install (Windows)
 
@@ -96,7 +97,7 @@ Download from [cockpitlink.ludvigh.dev](https://cockpitlink.ludvigh.dev) or the 
   "Start when I sign in" during setup starts it with Windows.
 - **Display PCs:** `CockpitLink-Client-<version>-Setup.exe`, or the portable
   `CockpitLink-Client-<version>-windows.zip` (unzip anywhere and run `cockpit_link.exe`). Both include
-  the Visual C++ runtime. For Linux, macOS and Android, see [Client app](#client-app).
+  the Visual C++ runtime. For Linux and macOS, see [Client app](#client-app).
 
 After every MSFS update, run **Repair Community hook** from the Start menu (sim closed): the hook
 contains a copy of a sim file that updates change. Uninstalling removes the program and the hook, and
@@ -113,7 +114,7 @@ Installed copies update themselves; there is no need to download a new installer
   displays are kept.
 - **Display PCs** (Windows client installed with the Setup program) update with the sim PC: the same
   click tells them to update too. They also update when the app starts (*Settings > Updates >
-  Update automatically*, on by default), and *Update now* is there for a manual update. Linux, Android
+  Update automatically*, on by default), and *Update now* is there for a manual update. Linux, macOS
   and the portable zip show that a new version exists, with a download link.
 - The only thing sent is a request for the latest release from GitHub's API. To turn the host's check
   off, set `"updates": false` in `host/config.json` (or `COCKPIT_LINK_UPDATES=0`). Copies built from
@@ -250,20 +251,6 @@ flutter build macos
 Output: `build/macos/Build/Products/Release/cockpit_link.app`. The app is not sandboxed, because it
 starts extra copies of itself for extra windows and writes a LaunchAgent for start at sign-in. It is not
 signed: on first start, right-click it and choose Open.
-
-### Android
-
-```
-flutter build apk
-```
-
-Install `build/app/outputs/flutter-apk/app-release.apk`. Some phones and tablets drop the multicast
-packets mDNS uses. If the host is not found, type its address in Settings.
-
-### iOS
-
-Not tested. The project builds with Xcode (`flutter build ios`). Automatic discovery needs Apple's
-multicast permission, so type the host address in Settings.
 
 ### Command line (optional)
 
