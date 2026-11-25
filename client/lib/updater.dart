@@ -139,30 +139,49 @@ class Updater extends ChangeNotifier {
 class _NoRelease implements Exception {}
 
 Future<Map<String, dynamic>> _getJson(String url) async {
-  final client = HttpClient()..userAgent = 'cockpitcast-client/$appVersion';
-  try {
-    final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 20));
-    req.headers.set('accept', 'application/vnd.github+json');
-    final res = await req.close().timeout(const Duration(seconds: 20));
-    if (res.statusCode == 404) throw _NoRelease();
-    if (res.statusCode != 200) throw 'GitHub answered ${res.statusCode}';
-    return (jsonDecode(await res.transform(utf8.decoder).join()) as Map).cast<String, dynamic>();
-  } finally {
-    client.close();
-  }
+  final (status, body) = await _fetch(url, accept: 'application/vnd.github+json', timeout: const Duration(seconds: 30));
+  if (status == 404) throw _NoRelease();
+  if (status != 200) throw 'GitHub answered $status';
+  return (jsonDecode(utf8.decode(body)) as Map).cast<String, dynamic>();
 }
 
 Future<List<int>> _getBytes(String url) async {
+  final (status, body) = await _fetch(url, timeout: const Duration(minutes: 5)); // follows GitHub's redirect to its file storage
+  if (status != 200) throw 'download failed ($status)';
+  return body;
+}
+
+/// GET [url]: (HTTP status, body). On Windows through the system's curl.exe: it checks certificates the
+/// way Windows does, which fetches a missing root certificate by itself. Dart's own client only trusts
+/// roots already on the PC, and a fresh Windows often lacks GitHub's (CERTIFICATE_VERIFY_FAILED).
+Future<(int, List<int>)> _fetch(String url, {String? accept, required Duration timeout}) async {
+  final curl = Platform.isWindows ? '${Platform.environment['SystemRoot'] ?? r'C:\Windows'}\\System32\\curl.exe' : null;
+  if (curl != null && File(curl).existsSync()) {
+    final dir = await Directory.systemTemp.createTemp('cockpitcast-get');
+    try {
+      final out = '${dir.path}\\body';
+      final r = await Process.run(curl, [
+        '-sSL', '--max-time', '${timeout.inSeconds}', '-A', 'cockpitcast-client/$appVersion',
+        if (accept != null) ...['-H', 'Accept: $accept'],
+        '-o', out, '-w', '%{http_code}', url,
+      ]);
+      if (r.exitCode != 0) throw 'download failed: ${'${r.stderr}'.trim()} (curl ${r.exitCode})';
+      final status = int.tryParse('${r.stdout}'.trim()) ?? 0;
+      return (status, File(out).existsSync() ? await File(out).readAsBytes() : <int>[]);
+    } finally {
+      dir.delete(recursive: true).catchError((_) => dir);
+    }
+  }
   final client = HttpClient()..userAgent = 'cockpitcast-client/$appVersion';
   try {
-    final req = await client.getUrl(Uri.parse(url)); // follows GitHub's redirect to its file storage
-    final res = await req.close().timeout(const Duration(minutes: 5));
-    if (res.statusCode != 200) throw 'download failed (${res.statusCode})';
+    final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 20));
+    if (accept != null) req.headers.set('accept', accept);
+    final res = await req.close().timeout(timeout);
     final b = BytesBuilder(copy: false);
-    await for (final chunk in res.timeout(const Duration(minutes: 5))) {
+    await for (final chunk in res.timeout(timeout)) {
       b.add(chunk);
     }
-    return b.takeBytes();
+    return (res.statusCode, b.takeBytes());
   } finally {
     client.close();
   }
