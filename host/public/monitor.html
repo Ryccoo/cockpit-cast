@@ -40,6 +40,7 @@
   <h1>CockpitCast monitor</h1>
   <a href="/editor" style="color:#9aa0a8;margin-left:16px">Layout editor</a>
   <span class="pill" title="The CockpitCast host this page talks to">host <b id="host">…</b></span>
+  <span class="pill" title="The version of CockpitCast running on the sim PC, and whether a newer one is out">version <b id="ver">…</b></span>
   <span class="pill" title="This page's own connection to the host (not the sim)">this page <b id="link" class="bad">connecting</b></span>
   <span class="pill" title="MSFS, via SimConnect: running, in a flight, which aircraft">sim <b id="sim">?</b></span>
   <span class="pill" title="capture.dll inside the sim (loaded about 10 s after a flight is live)">capture <b id="cap">?</b></span>
@@ -78,9 +79,17 @@ function connect() {
 
 function onText(m) {
   if (m.type === 'apps') renderApps(m);
-  if (m.type === 'welcome') document.getElementById('host').textContent = `${m.host} (v${m.version})`;
+  if (m.type === 'welcome') {
+    document.getElementById('host').textContent = m.host;
+    document.getElementById('ver').textContent = m.version;
+  }
   if (m.type === 'status') {
     window.showUpdate?.(m.update, (o) => ws?.readyState === 1 && ws.send(JSON.stringify(o)));
+    if (m.update?.current) {
+      const u = m.update;
+      const note = u.state === 'installing' ? ` · installing ${u.latest}` : u.available ? ` · ${u.latest} available` : u.latest ? ' · up to date' : '';
+      setText('ver', u.current + note, !u.available);
+    }
     const s = m.sim;
     setText('sim', !s.connected ? 'not running' : s.inFlight ? (s.paused ? 'paused' : 'in flight') + (s.aircraft ? ` · ${s.aircraft}` : '') : 'menu', s.connected && s.inFlight);
     setText('cap', m.capture.connected ? m.capture.source : 'none', m.capture.connected);
