@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cockpit Link Monitor</title>
+<style>
+  /* Debug page for testing the host. Real clients are apps. */
+  :root { --bg: #0e1418; --panel: #172026; --ink: #e3eaee; --muted: #8b9aa4; --ok: #4cc38a; --bad: #e5735f; --line: #2a363e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 16px; margin: 0; }
+  .pill { font-size: 12px; color: var(--muted); }
+  .pill b { font-weight: 600; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 16px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0; }
+  .tile h2 { font-size: 13px; margin: 0; padding: 8px 12px; display: flex; justify-content: space-between; gap: 8px; }
+  .tile h2 span { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+  canvas { display: block; width: 100%; aspect-ratio: 4 / 3; background: #000; }
+  .empty { padding: 40px 16px; color: var(--muted); text-align: center; grid-column: 1 / -1; }
+  .inst { margin: 0 16px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; overflow-x: auto; }
+  .inst h2 { font-size: 13px; margin: 0 0 8px; display: flex; gap: 8px; align-items: center; }
+  .inst h2 span { color: var(--muted); font-weight: 400; }
+  .inst button { margin-left: auto; background: #24313a; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 2px 10px; cursor: pointer; }
+  .inst table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  .inst th, .inst td { text-align: left; padding: 4px 8px; border-top: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+  .inst th { color: var(--muted); font-weight: 600; border-top: 0; }
+  .inst td.url { white-space: normal; color: var(--muted); word-break: break-all; }
+  .inst .dim { color: var(--muted); }
+  .inst h3 { font-size: 12px; margin: 14px 0 4px; color: var(--muted); }
+  .inst td button { background: #24313a; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 1px 8px; cursor: pointer; font-size: 11px; }
+  .note { color: var(--muted); font-size: 12px; margin: 8px 0; }
+  .note a { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cockpit Link monitor</h1>
+  <a href="/editor" style="color:#9aa0a8;margin-left:16px">Layout editor</a>
+  <span class="pill" title="The Cockpit Link host this page talks to">host <b id="host">…</b></span>
+  <span class="pill" title="This page's own connection to the host (not the sim)">this page <b id="link" class="bad">connecting</b></span>
+  <span class="pill" title="MSFS, via SimConnect: running, in a flight, which aircraft">sim <b id="sim">?</b></span>
+  <span class="pill" title="capture.dll inside the sim (loaded about 10 s after a flight is live)">capture <b id="cap">?</b></span>
+  <a href="https://ko-fi.com/richardludvigh" target="_blank" rel="noopener" title="Cockpit Link is free and open source. Support it on Ko-fi." style="margin-left:auto;color:#e06c75">&#9829; Support</a>
+</header>
+<main id="tiles"><div class="empty">Waiting for displays. Start the fake capture tool or capture.dll.</div></main>
+<section class="inst">
+  <h2>Instruments in this cockpit <span id="instAircraft"></span> <button id="instRefresh">Refresh</button></h2>
+  <div id="inst"><p class="note">Loading…</p></div>
+</section>
+<script>
+const tiles = document.getElementById('tiles');
+const views = new Map(); // id -> { tile, canvas, ctx, info, frames, lastSeq, aspectSet }
+const known = new Map(); // id -> display from the host
+// Displays in the loaded cockpit (null: no hook pages, e.g. testing with the fake capture tool: show all).
+let present = null;
+let ws;
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => {
+    for (const id of [...views.keys()]) removeView(id);
+    setText('link', 'connected', true);
+    ws.send(JSON.stringify({ type: 'hello', client: 'Debug monitor', protocol: 1 }));
+  };
+  ws.onclose = () => { setText('link', 'reconnecting', false); setTimeout(connect, 1500); };
+  ws.onmessage = (ev) => (typeof ev.data === 'string' ? onText(JSON.parse(ev.data)) : onFrame(ev.data));
+}
+
+function onText(m) {
+  if (m.type === 'welcome') document.getElementById('host').textContent = `${m.host} (v${m.version})`;
+  if (m.type === 'status') {
+    const s = m.sim;
+    setText('sim', !s.connected ? 'not running' : s.inFlight ? (s.paused ? 'paused' : 'in flight') + (s.aircraft ? ` · ${s.aircraft}` : '') : 'menu', s.connected && s.inFlight);
+    setText('cap', m.capture.connected ? m.capture.source : 'none', m.capture.connected);
+    present = m.hook?.connected ? new Set(m.hook.displays) : null;
+    syncTiles();
+  }
+  if (m.type === 'displays') {
+    known.clear();
+    for (const d of m.displays) known.set(d.id, d);
+    syncTiles();
+  }
+}
+
+// One tile per display in the loaded cockpit (or live). Watching only those keeps capture.dll's slots
+// for them; learned displays of other aircraft are listed under the instruments instead.
+function syncTiles() {
+  // Hidden tab: watch nothing (a forgotten monitor tab must not keep displays captured).
+  const show = document.hidden ? [] : [...known.values()].filter((d) => d.live || !present || present.has(d.id));
+  const ids = new Set(show.map((d) => d.id));
+  for (const id of [...views.keys()]) if (!ids.has(id)) removeView(id);
+  for (const d of show) if (!views.has(d.id)) addView(d);
+  if (!views.size && !tiles.querySelector('.empty')) {
+    tiles.innerHTML = '<div class="empty">No glass displays in the loaded cockpit. Start the sim (or the fake capture tool) and load a flight.</div>';
+  }
+}
+
+function removeView(id) {
+  const v = views.get(id);
+  if (!v) return;
+  v.tile.remove();
+  views.delete(id);
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'unsubscribe', display: id }));
+}
+
+function addView(d) {
+  tiles.querySelector('.empty')?.remove();
+  const tile = document.createElement('section');
+  tile.className = 'tile';
+  tile.innerHTML = `<h2>${d.name}<span>…</span></h2><canvas></canvas>`;
+  tiles.appendChild(tile);
+  const canvas = tile.querySelector('canvas');
+  views.set(d.id, { tile, canvas, ctx: canvas.getContext('2d'), info: tile.querySelector('h2 span'), times: [], lastSeq: 0, aspectSet: false });
+  ws.send(JSON.stringify({ type: 'subscribe', display: d.id, maxFps: 30 }));
+}
+
+async function onFrame(buf) {
+  const dv = new DataView(buf);
+  if (dv.getUint32(0, true) !== 0x31464c43) return; // "CLF1"
+  const seq = dv.getUint32(4, true);
+  const hostTime = dv.getFloat64(8, true);
+  const w = dv.getUint16(16, true), h = dv.getUint16(18, true);
+  const idLen = dv.getUint8(20);
+  const id = new TextDecoder().decode(new Uint8Array(buf, 21, idLen));
+  const v = views.get(id);
+  if (!v) return;
+  const bmp = await createImageBitmap(new Blob([new Uint8Array(buf, 21 + idLen)], { type: 'image/jpeg' }));
+  if (!v.aspectSet || v.canvas.width !== w) {
+    v.canvas.width = w; v.canvas.height = h; v.canvas.style.aspectRatio = `${w} / ${h}`; v.aspectSet = true;
+  }
+  v.ctx.drawImage(bmp, 0, 0);
+  bmp.close();
+  const now = performance.now();
+  v.times.push(now);
+  while (v.times.length && now - v.times[0] > 2000) v.times.shift();
+  const fps = v.times.length > 1 ? (v.times.length - 1) * 1000 / (now - v.times[0]) : 0;
+  const age = Date.now() - hostTime; // meaningful only when this browser runs on the host PC
+  v.info.textContent = `${w}×${h} · ${fps.toFixed(1)} fps · #${seq}` + (location.hostname === 'localhost' ? ` · ${age.toFixed(0)} ms` : '');
+}
+
+function setText(id, text, ok) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = ok ? 'ok' : 'bad';
+}
+
+// ---- instruments in this cockpit and the displays learned from them (sim PC only) ----
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+async function loadInstruments() {
+  const box = document.getElementById('inst');
+  try {
+    const [ri, rd] = await Promise.all([fetch('/api/instruments', { cache: 'no-store' }), fetch('/api/displays', { cache: 'no-store' })]);
+    if (ri.status === 403) { box.innerHTML = '<p class="note">Open this page on the sim PC (localhost) to see the instruments and displays.</p>'; return; }
+    const d = await ri.json();
+    const reg = new Map((await rd.json()).displays.map((x) => [x.id, x]));
+    document.getElementById('instAircraft').textContent = d.aircraft ? `· ${d.aircraft}` : '';
+    if (!d.current.length) { box.innerHTML = '<p class="note">No instrument pages reported yet. Load a flight (the Community hook must be installed).</p>' + learnedList(reg); return; }
+    box.innerHTML = `<table><thead><tr><th>Instrument</th><th>Size</th><th>Display</th><th></th><th>Details</th></tr></thead><tbody>${
+      d.current.map((i) => {
+        const disp = i.capturedAs ? reg.get(i.capturedAs) : null;
+        const status = disp
+          ? `<span class="ok">${esc(disp.name)}</span> <span class="dim">${esc(disp.id)}${disp.primary ? ' · primary' : ''}${disp.builtIn ? ' · built in' : ''}</span>`
+          : '<span class="dim">not a display</span>';
+        const actions = !disp
+          ? `<button data-act="add" data-key="${esc(i.key)}">Add as display</button>`
+          : disp.learned
+            ? `<button data-act="primary" data-id="${esc(disp.id)}" data-v="${!disp.primary}">${disp.primary ? 'Not primary' : 'Make primary'}</button> <button data-act="forget" data-id="${esc(disp.id)}">Forget</button>`
+            : '';
+        return `<tr><td><code>${esc(i.key)}</code></td><td>${i.w}×${i.h}</td><td>${status}</td><td>${actions}</td><td class="url">${esc(i.templateID || i.url || '')}</td></tr>`;
+      }).join('')
+    }</tbody></table>
+    <p class="note">Instruments the sim draws on their own page, largest first. All of them (radios, hour meters, ...) become displays by themselves and are remembered on this PC.
+    <b>Primary</b> displays (PFD, MFD, EICAS...) make a cockpit a glass cockpit for the screens; others show only on a screen they are assigned to.
+    History per aircraft: <a href="/api/instruments">/api/instruments</a>.</p>` + learnedList(reg, d.current);
+  } catch {
+    box.innerHTML = '<p class="note">Host not reachable.</p>';
+  }
+}
+// Learned displays not in the loaded cockpit.
+function learnedList(reg, current = []) {
+  const here = new Set(current.map((i) => i.capturedAs));
+  const rest = [...reg.values()].filter((x) => x.learned && !here.has(x.id));
+  if (!rest.length) return '';
+  return `<h3>Other displays learned on this PC</h3><table><tbody>${rest.map((x) => `<tr><td>${esc(x.name)} <span class="dim">${esc(x.id)}${x.primary ? ' · primary' : ''}</span></td><td class="url">${esc((x.aircraft ?? []).join(', '))}</td><td><button data-act="forget" data-id="${esc(x.id)}">Forget</button></td></tr>`).join('')}</tbody></table>`;
+}
+document.getElementById('inst').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('button[data-act]');
+  if (!b) return;
+  const body = b.dataset.act === 'add' ? { key: b.dataset.key }
+    : b.dataset.act === 'forget' ? { id: b.dataset.id, forget: true }
+    : { id: b.dataset.id, primary: b.dataset.v === 'true' };
+  if (b.dataset.act === 'forget' && b.textContent !== 'Sure?') { b.textContent = 'Sure?'; return; }
+  b.disabled = true;
+  await fetch('/api/displays', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+  loadInstruments();
+});
+document.getElementById('instRefresh').onclick = loadInstruments;
+loadInstruments();
+setInterval(loadInstruments, 10000);
+
+connect();
+document.addEventListener('visibilitychange', syncTiles);
+</script>
+</body>
+</html>

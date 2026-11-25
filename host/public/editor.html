@@ -1,0 +1,1103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cockpit Link Layout Editor</title>
+<style>
+  :root {
+    --bg: #0f1012; --panel: #17181b; --panel2: #1e2024; --line: #2c2f35; --text: #e6e6e6; --muted: #9aa0a8;
+    --accent: #3ba55c; --accent2: #2d8a4a; --warn: #e0a31b; --danger: #d9443a; --sel: #f0b429;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .status { color: var(--muted); font-size: 13px; }
+  header .status.ok::before { content: "● "; color: var(--accent); }
+  header .status.bad::before { content: "● "; color: var(--danger); }
+  header a { color: var(--muted); margin-left: auto; }
+  main { display: grid; grid-template-columns: 260px 1fr 320px; height: calc(100% - 49px); }
+  aside { background: var(--panel); border-right: 1px solid var(--line); overflow: auto; padding: 12px; }
+  aside.right { border-right: 0; border-left: 1px solid var(--line); }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
+  h2:first-child { margin-top: 0; }
+  .list { display: flex; flex-direction: column; gap: 4px; }
+  .item { padding: 7px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; display: flex; justify-content: space-between; gap: 8px; }
+  .item:hover { background: var(--panel2); }
+  .item.active { background: var(--panel2); border-color: var(--line); }
+  .item small { color: var(--muted); }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: #4a4f57; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent2); border-color: var(--accent); }
+  button.danger { color: #ffb4ae; }
+  button.danger.armed { background: var(--danger); color: white; border-color: var(--danger); }
+  button.icon { padding: 2px 8px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .row + .row { margin-top: 6px; }
+  label.f { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; margin: 5px 0; color: var(--muted); font-size: 13px; }
+  input, select { width: 100%; background: #0c0d0f; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px; font: inherit; min-width: 0; }
+  input[type=checkbox] { width: auto; }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 0; }
+  .center { position: relative; overflow: hidden; display: flex; flex-direction: column; }
+  .toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  .toolbar .grow { flex: 1; }
+  .toolbar .dirty { color: var(--warn); font-size: 13px; }
+  .toolbar label { color: var(--muted); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+  .toolbar select { width: auto; }
+  .stagewrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 30px 20px 20px; min-height: 0; }
+  .stage { position: relative; background: #050506; box-shadow: 0 0 0 1px var(--line); touch-action: none; }
+  .stage.grid { background-image: linear-gradient(#ffffff0c 1px, transparent 1px), linear-gradient(90deg, #ffffff0c 1px, transparent 1px); }
+  .g { position: absolute; user-select: none; touch-action: none; }
+  .stage.edit .g { cursor: grab; }
+  .g canvas { width: 100%; height: 100%; display: block; }
+  .g .cap { position: absolute; left: 0; right: 0; top: -19px; text-align: center; font-size: 11px; line-height: 17px; color: #cfd3d8; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .g .cap span { background: #000000b0; padding: 1px 6px; border-radius: 3px; }
+  .g.sel { outline: 2px solid var(--sel); outline-offset: -2px; z-index: 2; }
+  .g.sel .cap span { background: var(--sel); color: #111; }
+  .g .handle { position: absolute; right: -6px; bottom: -6px; width: 14px; height: 14px; background: var(--sel); border-radius: 3px; cursor: nwse-resize; display: none; }
+  .g.sel .handle { display: block; }
+  .palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .arc { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 4px; margin: 4px 0; }
+  .live { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .err { color: #ffb4ae; font-size: 13px; min-height: 18px; }
+  .screen { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+  .screen .head { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .screen .head small { color: var(--muted); white-space: nowrap; }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; }
+  .seg button.on { background: var(--accent2); }
+  /* preview of all screens */
+  #preview { position: fixed; inset: 0; background: #08090a; display: none; flex-direction: column; z-index: 10; }
+  #preview.open { display: flex; }
+  #preview .bar { display: flex; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #preview .bar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  #preview .grid { flex: 1; display: flex; flex-wrap: wrap; gap: 18px; padding: 18px; align-content: center; justify-content: center; overflow: auto; }
+  #preview .card { display: flex; flex-direction: column; gap: 6px; }
+  #preview .card .t { color: var(--muted); font-size: 13px; }
+  #preview .card .t b { color: var(--text); font-weight: 600; }
+  #preview .screenbox { background: #000; box-shadow: 0 0 0 1px var(--line); position: relative; display: flex; align-items: center; justify-content: center; }
+  #preview .screenbox .none { color: var(--muted); }
+  /* insert window */
+  #insert { position: fixed; inset: 0; background: #000000b8; display: none; z-index: 20; align-items: center; justify-content: center; padding: 24px; }
+  #insert.open { display: flex; }
+  #insert .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+  #insert .bar { display: flex; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  #insert .bar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  #insert .body { overflow: auto; padding: 4px 16px 16px; }
+  #insert .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  #insert .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+  #insert .card:hover { border-color: var(--accent); }
+  #insert .card canvas { width: 100%; aspect-ratio: 1; display: block; background: #050506; border-radius: 4px; }
+  #insert .card.glass canvas { aspect-ratio: 4 / 3; }
+  #insert .card .n { font-size: 13px; }
+  #insert .card .s { font-size: 11px; color: var(--muted); }
+  #insert .card .s.on { color: var(--accent); }
+  #insert .bar input { width: 220px; }
+  #insert details.grp { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; background: #00000018; }
+  #insert details.grp > summary { cursor: pointer; padding: 8px 12px; list-style: none; display: flex; gap: 10px; align-items: baseline; }
+  #insert details.grp > summary::-webkit-details-marker { display: none; }
+  #insert details.grp > summary::before { content: '\25B8'; color: var(--muted); }
+  #insert details.grp[open] > summary::before { content: '\25BE'; }
+  #insert details.grp > summary .an { font-weight: 600; }
+  #insert details.grp > summary .am { color: var(--muted); font-size: 12px; }
+  #insert details.grp > .cards { padding: 0 12px 12px; }
+  #insert details.grp.now { border-color: var(--accent); }
+  .insertbtn { width: 100%; padding: 10px; font-weight: 600; }
+  #cropCv { width: 100%; display: block; background: #000; border-radius: 4px; cursor: crosshair; touch-action: none; margin: 6px 0; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } aside { border: 0; } .stagewrap { height: 60vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cockpit Link · Layout editor</h1>
+  <span id="conn" class="status bad">connecting</span>
+  <a href="/">Monitor</a>
+  <a href="https://ko-fi.com/richardludvigh" target="_blank" rel="noopener" title="Cockpit Link is free and open source. Support it on Ko-fi." style="margin-left:0;color:#e06c75">&#9829; Support</a>
+</header>
+<main>
+  <aside>
+    <h2>Layouts</h2>
+    <div id="layouts" class="list"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="btnNew">New</button>
+      <button id="btnDup">Duplicate</button>
+      <button id="btnDel" class="danger">Delete</button>
+    </div>
+    <div class="row"><button id="btnReset" class="danger">Reset all to defaults</button></div>
+
+    <h2>Screens</h2>
+    <div class="hint">One entry per physical screen. Start a client with <code>--screen &lt;id&gt;</code>. Glass cockpits show the chosen glass display; if the cockpit lacks it (or it is automatic), the cockpit's primary displays fill the screens in order (PFD, MFD, ...). Steam-gauge aircraft show the layout.</div>
+    <div id="screens"></div>
+    <div class="row"><button id="btnAddScreen">Add screen</button><button id="btnScreens" class="primary" disabled>Save screens</button></div>
+    <div id="screensMsg" class="hint"></div>
+  </aside>
+
+  <section class="center">
+    <div class="toolbar">
+      <button id="btnSave" class="primary" disabled>Save</button>
+      <button id="btnRevert" disabled>Revert</button>
+      <span id="dirty" class="dirty"></span>
+      <span class="grow"></span>
+      <span class="seg" title="Where the needles get their values"><button data-mode="live">Live data</button><button data-mode="demo">Demo</button></span>
+      <button id="btnPreview">Preview all screens</button>
+      <label>Grid <select id="grid"><option value="0">off</option><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select></label>
+      <label title="Round gauges stay square when resized (glass items keep their own shape)"><input type="checkbox" id="square" checked> keep round</label>
+    </div>
+    <div class="err" id="err" style="padding:0 12px"></div>
+    <div class="stagewrap" id="stagewrap"><div class="empty">Loading layouts from the host...</div></div>
+  </section>
+
+  <aside class="right">
+    <h2>Add</h2>
+    <button id="btnInsert" class="primary insertbtn">Insert gauge or display…</button>
+    <div class="hint">Steam gauges and glass displays (or part of one) can sit side by side in a layout.</div>
+    <div id="props"></div>
+  </aside>
+</main>
+
+<div id="preview">
+  <div class="bar">
+    <h1>All screens</h1>
+    <span class="seg"><button data-mode="live">Live data</button><button data-mode="demo">Demo</button></span>
+    <span class="hint" id="previewHint"></span>
+    <span style="flex:1"></span>
+    <button id="btnClosePreview">Close (Esc)</button>
+  </div>
+  <div class="grid" id="previewGrid"></div>
+</div>
+
+<div id="insert">
+  <div class="box">
+    <div class="bar">
+      <h1>Insert</h1>
+      <span class="hint" id="insertHint"></span>
+      <span style="flex:1"></span>
+      <input id="insFilter" type="search" placeholder="Find aircraft, display or gauge">
+      <button id="btnCloseInsert">Close (Esc)</button>
+    </div>
+    <div class="body">
+      <h2>Glass displays</h2>
+      <div class="hint">Every display seen on this computer, by aircraft (a display can be in several). Displays in the loaded cockpit refresh every 5 seconds; the others show the last picture saved. After inserting, pick a part of the display in the properties (e.g. just the ADF frequency).</div>
+      <div id="insGlass"></div>
+      <h2>Flight instruments</h2>
+      <div class="cards" id="insSteam"></div>
+      <h2>Engine and system dials</h2>
+      <div class="cards" id="insDials"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/gauges.js"></script>
+<script>
+'use strict';
+// ---- gauge catalogue ----
+const TYPES = {
+  asi: 'Airspeed', attitude: 'Attitude', altimeter: 'Altimeter', turn: 'Turn coordinator', heading: 'Heading',
+  vsi: 'Vertical speed', dial: 'Dial (engine etc.)', cdi: 'VOR / ILS', adf: 'ADF', clock: 'Clock',
+};
+const PRESETS = {
+  'Tachometer': { var: 'rpm', label: 'RPM', sublabel: 'x100', min: 0, max: 3500, majorStep: 500, minorStep: 100, labelScale: 0.01, redlineVar: 'maxRpm', arcs: [{ from: 2100, to: 2700, color: 'green' }] },
+  'Manifold pressure': { var: 'map', label: 'MAN PRESS', sublabel: 'IN HG', min: 10, max: 35, majorStep: 5, minorStep: 1, decimals: 1, arcs: [{ from: 15, to: 25, color: 'green' }] },
+  'Fuel left': { var: 'fuelL', label: 'FUEL L', sublabel: 'GAL', min: 0, max: 28, majorStep: 7, minorStep: 3.5, arcs: [{ from: 0, to: 3, color: 'red' }] },
+  'Fuel right': { var: 'fuelR', label: 'FUEL R', sublabel: 'GAL', min: 0, max: 28, majorStep: 7, minorStep: 3.5, arcs: [{ from: 0, to: 3, color: 'red' }] },
+  'Oil temperature': { var: 'oilTemp', label: 'OIL T', sublabel: '°F', min: 50, max: 250, majorStep: 50, minorStep: 25, arcs: [{ from: 100, to: 245, color: 'green' }, { from: 245, to: 250, color: 'red' }] },
+  'Oil pressure': { var: 'oilPress', label: 'OIL P', sublabel: 'PSI', min: 0, max: 120, majorStep: 20, minorStep: 10, arcs: [{ from: 0, to: 20, color: 'red' }, { from: 50, to: 90, color: 'green' }, { from: 115, to: 120, color: 'red' }] },
+  'EGT': { var: 'egt', label: 'EGT', sublabel: '°F', min: 1000, max: 1800, majorStep: 200, minorStep: 50 },
+  'Fuel flow': { var: 'fuelFlow', label: 'FUEL FLOW', sublabel: 'GPH', min: 0, max: 20, majorStep: 5, minorStep: 1, decimals: 1 },
+  'Vacuum': { var: 'suction', label: 'VAC', sublabel: 'IN HG', min: 3, max: 7, majorStep: 1, minorStep: 0.5, decimals: 1, arcs: [{ from: 4.5, to: 5.5, color: 'green' }] },
+  'Ammeter': { var: 'amps', label: 'AMPS', sublabel: '', min: -60, max: 60, majorStep: 30, minorStep: 10 },
+  'Voltmeter': { var: 'bus1Volts', label: 'VOLTS', sublabel: '', min: 0, max: 32, majorStep: 8, minorStep: 2, decimals: 1, arcs: [{ from: 24, to: 30, color: 'green' }] },
+};
+const COLORS = ['green', 'yellow', 'red', 'white', 'blue'];
+
+// ---- state ----
+let ws = null, connected = false;
+let layouts = [];            // from the host
+let screens = [];            // from the host
+let displayIds = ['pfd', 'mfd'];
+let displayNames = {};
+let displayInfo = {};        // id -> { name, width, height, live } from the host
+let catalog = null;          // every display seen, by aircraft (host 'catalog' message)
+let varInfo = [];            // [{key, name, unit}]
+let varIndex = {};
+let latest = null, latestAt = 0;
+let refs = {};               // vfe/vno from the host's aircraft profile
+let currentId = null;        // selected layout id
+let draft = null;            // editable copy of the selected layout
+let dirty = false;
+let selId = null;            // selected gauge id
+let pendingSelect = null;    // layout id to select after the next 'layouts' message
+let dataMode = 'demo';       // 'live' (host data) or 'demo' (synthetic flight in this page)
+
+const $ = (id) => document.getElementById(id);
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// ---- values for the gauges: live from the host, or a demo flight ----
+const demo = (() => {
+  const t0 = performance.now();
+  let last = 0, hdg = 300, alt = 4500, fuelL = 24, fuelR = 23.5, out = {}, lastT = 0;
+  return () => {
+    const now = performance.now();
+    if (now - last < 15) return out;
+    last = now;
+    const t = (now - t0) / 1000, dt = t - lastT;
+    lastT = t;
+    const bank = 22 * Math.sin(t / 15);
+    const turnRate = (1091 * Math.tan((bank * Math.PI) / 180)) / 105;
+    hdg = (hdg + turnRate * dt + 360) % 360;
+    const vs = 600 * Math.sin(t / 23);
+    alt += (vs / 60) * dt;
+    fuelL = Math.max(0, fuelL - (4.2 / 3600) * dt);
+    fuelR = Math.max(0, fuelR - (4.2 / 3600) * dt);
+    const secs = (Date.now() / 1000 - new Date().getTimezoneOffset() * 60) % 86400;
+    out = {
+      ias: 105 - vs / 60 + 2 * Math.sin(t / 3), pitch: -(2.5 + vs / 250), bank: -bank, alt, baro: 29.92, vs, hdg, hdgBug: 330,
+      turnRate, ball: 0.1 * Math.sin(t / 4), suction: 5 + 0.1 * Math.sin(t / 7), rpm: 2350 + vs / 8 + 10 * Math.sin(t / 2), map: 22.5,
+      oilTemp: 185 + 5 * Math.sin(t / 30), oilPress: 62 + 2 * Math.sin(t / 9), egt: 1350 + 20 * Math.sin(t / 11), fuelFlow: 8.5 + vs / 1000,
+      fuelL, fuelR, amps: 2 + Math.sin(t / 5), volts: 28.1, bus1Volts: 28.1, battMaster: 1,
+      nav1Obs: 330, nav1Cdi: 60 * Math.sin(t / 13), nav1Gsi: 40 * Math.sin(t / 17), nav1ToFrom: 1, nav1HasNav: 1, nav1HasGs: 1,
+      nav2Obs: 90, nav2Cdi: -30 * Math.sin(t / 19), nav2Gsi: 0, nav2ToFrom: 2, nav2HasNav: 1, nav2HasGs: 0,
+      adfRadial: (40 + 20 * Math.sin(t / 21) + 360) % 360, adfCard: 0, adfSignal: 1, flaps: 0, trim: 0, onGround: 0,
+      localTime: secs, zuluTime: (Date.now() / 1000) % 86400, vs0: 40, vs1: 48, vc: 124, vne: 163, maxRpm: 2700, vfe: 85, vno: 129,
+    };
+    return out;
+  };
+})();
+const V = {
+  get(k, fb = 0) {
+    if (dataMode === 'demo') { const d = demo(); return k in d ? d[k] : fb; }
+    const i = varIndex[k];
+    if (latest && i !== undefined) return latest[i];
+    return k in refs ? refs[k] : fb;
+  },
+  knows(k) { return dataMode === 'demo' ? k in demo() : k in varIndex; },
+  get live() { return dataMode === 'demo' || (latest !== null && performance.now() - latestAt < 2000); },
+};
+function setDataMode(m) {
+  dataMode = m;
+  for (const b of document.querySelectorAll('.seg button')) b.classList.toggle('on', b.dataset.mode === m);
+  $('previewHint').textContent = m === 'demo' ? 'Demo: a synthetic flight, generated in this page.' : 'Live: values from the sim (or the host\'s test data).';
+  try { localStorage.setItem('clEditorData', m); } catch {}
+}
+for (const b of document.querySelectorAll('.seg button')) b.onclick = () => setDataMode(b.dataset.mode);
+
+// ---- drawing: every gauge canvas on the page is redrawn ~30 times a second ----
+let drawList = [];           // [{canvas, g}] for the editor stage
+let previewList = [];        // same for the preview
+function sizeCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(cv.clientWidth * dpr)), h = Math.max(1, Math.round(cv.clientHeight * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  return dpr;
+}
+let lastDraw = 0;
+let lastSlow = 0;
+function drawLoop(now) {
+  requestAnimationFrame(drawLoop);
+  if (now - lastDraw < 30) return;
+  lastDraw = now;
+  if ($('insert').classList.contains('open')) {
+    // Insert window: thumbnails every half second (steam gauges move; glass pictures arrive every 5 s).
+    if (now - lastSlow > 500) { lastSlow = now; drawAll(insertList); updateSubs(); }
+    return;
+  }
+  drawAll($('preview').classList.contains('open') ? previewList : drawList);
+  drawCrop();
+  updateLive();
+  if (now - lastSlow > 1000) { lastSlow = now; updateSubs(); }
+}
+function drawAll(list) {
+  for (const { canvas, g } of list) {
+    if (!canvas.isConnected || !canvas.clientWidth) continue; // e.g. in a closed aircraft group
+    const dpr = sizeCanvas(canvas);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (g.type === 'glass') drawGlass(ctx, canvas.clientWidth, canvas.clientHeight, g.options || {});
+    else CockpitGauges.drawGauge(ctx, canvas.clientWidth, canvas.clientHeight, g.type, g.options, V);
+  }
+}
+
+// ---- glass displays: frames from the host, drawn into layout items ----
+const frames = {};           // display id -> { bmp, at }
+const decoding = new Set();
+async function onFrame(buf) {
+  const dv = new DataView(buf);
+  if (buf.byteLength < 22 || dv.getUint32(0, true) !== 0x31464c43) return; // "CLF1"
+  const idLen = dv.getUint8(20);
+  const id = new TextDecoder().decode(new Uint8Array(buf, 21, idLen));
+  if (decoding.has(id)) return; // still decoding the previous one: skip, a newer frame follows
+  decoding.add(id);
+  try {
+    const bmp = await createImageBitmap(new Blob([new Uint8Array(buf, 21 + idLen)], { type: 'image/jpeg' }));
+    const old = frames[id];
+    frames[id] = { bmp, at: performance.now() };
+    old?.bmp.close?.();
+  } catch {} finally {
+    decoding.delete(id);
+  }
+}
+// Saved pictures (host: /thumb/<id>.jpg) for displays with no live frame, e.g. other aircraft's.
+const savedPics = {};        // id -> { bmp, thumbAt } or { loading }
+function savedPicture(id) {
+  const at = catalog?.displays[id]?.thumbAt;
+  const s = savedPics[id];
+  if (!at || s?.loading) return s?.bmp ? s : null;
+  if (s?.thumbAt === at) return s.bmp ? s : null;
+  savedPics[id] = { ...s, loading: true };
+  fetch(`/thumb/${encodeURIComponent(id)}.jpg?t=${at}`)
+    .then((r) => (r.ok ? r.blob() : Promise.reject()))
+    .then(createImageBitmap)
+    .then((bmp) => { savedPics[id]?.bmp?.close?.(); savedPics[id] = { bmp, thumbAt: at, saved: true }; })
+    .catch(() => { savedPics[id] = { ...savedPics[id], loading: false, thumbAt: at }; });
+  return s?.bmp ? s : null;
+}
+/// The picture to draw: the live frame, else the saved one.
+function pictureOf(id) { return frames[id] || savedPicture(id); }
+/// Picture size [w, h] of a display, as well as known.
+function pictureSize(id) {
+  const p = pictureOf(id);
+  if (p?.bmp) return [p.bmp.width, p.bmp.height];
+  const d = displayInfo[id] || {};
+  if (d.width && d.height) return [d.width, d.height];
+  const m = /^(\d+)x(\d+)$/.exec(catalog?.displays[id]?.size || '');
+  return m ? [+m[1], +m[2]] : [4, 3];
+}
+const subs = new Map();      // display id -> fps asked of the host
+// Ask the host for frames of the displays on screen: layout items at 10 fps, the insert window's
+// thumbnails at 0.2 fps (every 5 s). Called about once a second.
+function updateSubs() {
+  const want = new Map();
+  if (document.hidden) { applySubs(want); return; } // tab hidden: no previews at all
+  const add = (id, fps) => { if (id) want.set(id, Math.max(want.get(id) ?? 0, fps)); };
+  const glassOf = (l) => (l?.gauges || []).filter((g) => g.type === 'glass').map((g) => g.options?.display);
+  // Insert window: only displays in the loaded cockpit (the others have no frames, and watching
+  // them would take capture slots from real ones), one picture every 5 s: previews only.
+  if ($('insert').classList.contains('open')) for (const id of catalog ? catalog.present : displayIds.filter((x) => displayInfo[x]?.live)) add(id, 0.2);
+  else if ($('preview').classList.contains('open')) {
+    for (const sc of screensDraft && screensDraft.length ? screensDraft : screens) {
+      const l = sc.steam === currentId && draft ? draft : layouts.find((x) => x.id === sc.steam);
+      for (const id of glassOf(l)) add(id, 10);
+    }
+  } else for (const id of glassOf(draft)) add(id, 10);
+  applySubs(want);
+}
+function applySubs(want) {
+  for (const [id, fps] of subs) if (want.get(id) !== fps) { send({ type: 'unsubscribe', display: id }); subs.delete(id); }
+  for (const [id, fps] of want) if (!subs.has(id)) { send({ type: 'subscribe', display: id, maxFps: fps }); subs.set(id, fps); }
+}
+function cropOf(o) { return o.crop || { x: 0, y: 0, w: 1, h: 1 }; }
+function drawGlass(ctx, w, h, o) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+  const f = pictureOf(o.display);
+  const name = displayNames[o.display] || catalog?.displays[o.display]?.name || (o.display || '?').toUpperCase();
+  if (!f) {
+    ctx.strokeStyle = '#3a3f46';
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(1, 1, w - 2, h - 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#8b929a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const fs = Math.max(10, Math.min(16, w / 12));
+    ctx.font = `600 ${fs}px system-ui, sans-serif`;
+    ctx.fillText(name, w / 2, h / 2 - fs * 0.7);
+    ctx.font = `${fs * 0.8}px system-ui, sans-serif`;
+    ctx.fillText('no picture yet', w / 2, h / 2 + fs * 0.7);
+    return;
+  }
+  const c = cropOf(o), bw = f.bmp.width, bh = f.bmp.height;
+  const sx = c.x * bw, sy = c.y * bh, sw = Math.max(1, c.w * bw), sh = Math.max(1, c.h * bh);
+  let dx = 0, dy = 0, dw = w, dh = h;
+  if (o.fit !== 'fill') {
+    const k = o.fit === 'cover' ? Math.max(w / sw, h / sh) : Math.min(w / sw, h / sh);
+    dw = sw * k; dh = sh * k; dx = (w - dw) / 2; dy = (h - dh) / 2;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.clip();
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(f.bmp, sx, sy, sw, sh, dx, dy, dw, dh);
+  ctx.restore();
+  if (f.saved || performance.now() - f.at > 6000) {
+    ctx.fillStyle = '#000000a0';
+    ctx.fillRect(0, h - 18, w, 18);
+    ctx.fillStyle = '#c9a227';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(f.saved ? 'saved picture' : 'last picture (not live)', 6, h - 9);
+  }
+}
+requestAnimationFrame(drawLoop);
+
+function captionOf(g) {
+  const o = g.options || {};
+  if (g.type === 'glass') return `${displayNames[o.display] || (o.display || '?').toUpperCase()}${o.crop ? ' (part)' : ''}`;
+  if (g.type === 'dial') return [o.label, o.var ? `(${o.var})` : ''].filter(Boolean).join(' ') || 'Dial';
+  if (g.type === 'cdi') return `VOR / ILS ${o.nav || 1}`;
+  if (g.type === 'clock') return o.zone === 'zulu' ? 'Clock (UTC)' : 'Clock';
+  return TYPES[g.type] || g.type;
+}
+
+// ---- connection ----
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => {
+    subs.clear();
+    connected = true;
+    setConn();
+    send({ type: 'hello', client: 'Layout editor', protocol: 1 });
+    send({ type: 'subscribeData', maxHz: 30 });
+    if (!document.hidden) send({ type: 'subscribeCatalog' });
+  };
+  ws.onclose = () => { connected = false; setConn(); setTimeout(connect, 2000); };
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') return void onFrame(ev.data);
+    const m = JSON.parse(ev.data);
+    if (m.type === 'layouts') onLayouts(m.layouts);
+    else if (m.type === 'screens') {
+      screens = m.screens;
+      if (!screensDirty) screensDraft = null;
+      renderScreens();
+      renderLayouts();
+      if ($('preview').classList.contains('open')) renderPreview();
+    }
+    else if (m.type === 'displays') {
+      displayIds = m.displays.map((d) => d.id);
+      displayNames = Object.fromEntries(m.displays.map((d) => [d.id, d.name]));
+      displayInfo = Object.fromEntries(m.displays.map((d) => [d.id, d]));
+      renderScreens();
+      if ($('insert').classList.contains('open')) renderInsert();
+    }
+    else if (m.type === 'catalog') {
+      catalog = m;
+      for (const [id, d] of Object.entries(m.displays)) if (!displayNames[id]) displayNames[id] = d.name;
+      if ($('insert').classList.contains('open')) { renderInsert(); updateSubs(); }
+    }
+    else if (m.type === 'status') { const sp = m.sim?.speeds; refs = sp ? Object.fromEntries(Object.entries({ vfe: sp.vfe, vno: sp.vno }).filter(([, v]) => v)) : {}; }
+    else if (m.type === 'dataVars') { varInfo = m.info || m.vars.map((k) => ({ key: k, name: k, unit: '' })); varIndex = Object.fromEntries(m.vars.map((k, i) => [k, i])); renderProps(); }
+    else if (m.type === 'data') { latest = m.v; latestAt = performance.now(); }
+    else if (m.type === 'error') showErr(m.message);
+    else if (m.type === 'layoutSaved') showErr('');
+  };
+}
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+function setConn() {
+  const c = $('conn');
+  c.textContent = connected ? `connected to ${location.host}` : 'not connected, retrying';
+  c.className = 'status ' + (connected ? 'ok' : 'bad');
+}
+function showErr(t) { $('err').textContent = t || ''; }
+
+function onLayouts(list) {
+  layouts = list;
+  if (pendingSelect && layouts.some((l) => l.id === pendingSelect)) { currentId = pendingSelect; pendingSelect = null; draft = null; }
+  if (!currentId || !layouts.some((l) => l.id === currentId)) { currentId = layouts[0]?.id ?? null; draft = null; }
+  if (!dirty || !draft) loadDraft();
+  renderLayouts();
+  renderScreens();
+  if (location.hash === '#preview' && !previewOpened) { previewOpened = true; $('preview').classList.add('open'); }
+  if ($('preview').classList.contains('open')) renderPreview();
+}
+let previewOpened = false;
+function loadDraft() {
+  const l = layouts.find((x) => x.id === currentId);
+  draft = l ? clone(l) : null;
+  dirty = false;
+  if (!draft?.gauges.some((g) => g.id === selId)) selId = null;
+  renderAll();
+}
+function markDirty() { dirty = true; renderToolbar(); renderLayouts(); }
+
+// ---- layouts list ----
+function renderLayouts() {
+  $('layouts').innerHTML = layouts.map((l) => {
+    const used = screens.filter((s) => s.steam === l.id).map((s) => s.id).join(', ');
+    return `<div class="item ${l.id === currentId ? 'active' : ''}" data-id="${esc(l.id)}"><span>${esc(l.id === currentId && draft ? draft.name : l.name)}${l.id === currentId && dirty ? ' *' : ''}</span><small>${used ? 'screen ' + esc(used) : ''}</small></div>`;
+  }).join('');
+  for (const el of $('layouts').querySelectorAll('.item')) el.onclick = () => selectLayout(el.dataset.id);
+  $('btnDel').disabled = !draft || layouts.length <= 1;
+  $('btnDup').disabled = !draft;
+}
+function selectLayout(id) {
+  if (id === currentId) return;
+  if (dirty && !confirmLeave()) return;
+  currentId = id;
+  selId = null;
+  loadDraft();
+}
+let leaveArmed = 0;
+function confirmLeave() {
+  // Two clicks within 3 s discard unsaved changes (no blocking browser dialogs).
+  if (Date.now() - leaveArmed < 3000) return true;
+  leaveArmed = Date.now();
+  showErr('Unsaved changes: click again to discard them, or Save first.');
+  return false;
+}
+function uniqueId(base) {
+  let id = base.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'layout';
+  if (!/^[a-z0-9]/.test(id)) id = 'l-' + id;
+  let n = id, i = 2;
+  while (layouts.some((l) => l.id === n)) n = `${id}-${i++}`;
+  return n;
+}
+$('btnNew').onclick = () => {
+  if (dirty && !confirmLeave()) return;
+  const id = uniqueId('my-layout');
+  pendingSelect = id;
+  dirty = false;
+  send({ type: 'saveLayout', layout: { id, name: 'New layout', width: 1200, height: 800, gauges: [] } });
+};
+$('btnDup').onclick = () => {
+  if (!draft) return;
+  const l = clone(draft);
+  l.id = uniqueId(draft.id + '-copy');
+  l.name = draft.name + ' (copy)';
+  pendingSelect = l.id;
+  dirty = false;
+  send({ type: 'saveLayout', layout: l });
+};
+armButton($('btnDel'), 'Delete?', () => { if (draft) { send({ type: 'deleteLayout', id: draft.id }); currentId = null; dirty = false; } });
+armButton($('btnReset'), 'Really reset?', () => { dirty = false; currentId = null; send({ type: 'resetLayouts' }); });
+
+function armButton(btn, armedText, action) {
+  const text = btn.textContent;
+  let timer = null;
+  btn.onclick = () => {
+    if (btn.classList.contains('armed')) { clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = text; action(); return; }
+    btn.classList.add('armed'); btn.textContent = armedText;
+    timer = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = text; }, 3000);
+  };
+}
+
+// ---- screens (any number) ----
+let screensDraft = null, screensDirty = false;
+function renderScreens() {
+  if (!screensDraft) screensDraft = screens.map((s) => ({ id: s.id, name: s.name, glass: s.glass, steam: s.steam }));
+  if (!screensDraft.length) { $('screens').innerHTML = '<div class="hint">No screens yet.</div>'; return; }
+  $('screens').innerHTML = screensDraft.map((d, i) => {
+    const live = screens.find((s) => s.id === d.id);
+    const glassOpts = ['', ...new Set([...displayIds, d.glass].filter(Boolean))].map((g) => `<option value="${esc(g)}" ${g === (d.glass ?? '') ? 'selected' : ''}>${g ? esc(displayNames[g] ?? g.toUpperCase()) : '(automatic)'}</option>`).join('');
+    const steamOpts = ['', ...layouts.map((l) => l.id)].map((id) => `<option value="${esc(id)}" ${id === (d.steam ?? '') ? 'selected' : ''}>${id ? esc(layouts.find((l) => l.id === id)?.name ?? id) : '(none)'}</option>`).join('');
+    return `<div class="screen"><div class="head"><input data-i="${i}" data-k="name" value="${esc(d.name)}" title="Screen name">
+        <small>id ${esc(d.id)}${live ? ' · ' + esc(live.mode) : ' · new'}</small>
+        <button class="icon danger" data-del="${i}" title="Remove this screen" ${screensDraft.length <= 1 ? 'disabled' : ''}>×</button></div>
+      <label class="f">Glass <select data-i="${i}" data-k="glass">${glassOpts}</select></label>
+      <label class="f">Steam <select data-i="${i}" data-k="steam">${steamOpts}</select></label></div>`;
+  }).join('');
+  for (const el of $('screens').querySelectorAll('[data-k]')) {
+    const handler = () => { screensDraft[el.dataset.i][el.dataset.k] = el.value || (el.dataset.k === 'name' ? '' : null); screensChanged(); };
+    el.oninput = el.dataset.k === 'name' ? handler : null;
+    el.onchange = handler;
+  }
+  for (const b of $('screens').querySelectorAll('[data-del]')) b.onclick = () => { screensDraft.splice(+b.dataset.del, 1); screensChanged(); renderScreens(); };
+}
+function screensChanged() { screensDirty = true; $('btnScreens').disabled = false; refreshPreview(); }
+$('btnAddScreen').onclick = () => {
+  let n = 1;
+  while (screensDraft.some((s) => s.id === String(n))) n++;
+  screensDraft.push({ id: String(n), name: `Screen ${n}`, glass: null, steam: layouts[0]?.id ?? null });
+  screensChanged();
+  renderScreens();
+};
+$('btnScreens').onclick = () => {
+  send({ type: 'setScreens', screens: screensDraft.map((s) => ({ ...s, name: s.name || `Screen ${s.id}` })) });
+  screensDirty = false;
+  $('btnScreens').disabled = true;
+  $('screensMsg').textContent = 'Saved. Screens update straight away.';
+  setTimeout(() => ($('screensMsg').textContent = ''), 3000);
+};
+
+// ---- toolbar ----
+function renderToolbar() {
+  $('btnSave').disabled = !dirty;
+  $('btnRevert').disabled = !dirty;
+  $('dirty').textContent = dirty ? 'Unsaved changes' : '';
+}
+$('btnSave').onclick = save;
+$('btnRevert').onclick = () => { loadDraft(); showErr(''); };
+$('grid').onchange = renderStage;
+function save() {
+  if (!draft || !dirty) return;
+  send({ type: 'saveLayout', layout: draft });
+  dirty = false;
+  renderToolbar();
+  renderLayouts();
+}
+
+// ---- stage (editor) ----
+let stage = null;
+function renderAll() { renderToolbar(); renderLayouts(); renderStage(); renderProps(); }
+function buildLayout(container, layout, scale, editable, list) {
+  for (const g of layout.gauges) {
+    const el = document.createElement('div');
+    el.className = 'g' + (editable && g.id === selId ? ' sel' : '');
+    Object.assign(el.style, { left: g.x * scale + 'px', top: g.y * scale + 'px', width: g.w * scale + 'px', height: g.h * scale + 'px' });
+    el.innerHTML = `<div class="cap"><span>${esc(captionOf(g))}</span></div><canvas></canvas>${editable ? '<div class="handle"></div>' : ''}`;
+    if (editable) el.onpointerdown = (e) => startDrag(e, g, e.target.classList.contains('handle') ? 'resize' : 'move');
+    container.appendChild(el);
+    list.push({ canvas: el.querySelector('canvas'), g });
+  }
+}
+function renderStage() {
+  const wrap = $('stagewrap');
+  drawList = [];
+  if (!draft) { wrap.innerHTML = '<div class="empty">No layout selected.</div>'; return; }
+  const W = wrap.clientWidth - 40, H = wrap.clientHeight - 50;
+  const scale = Math.min(W / draft.width, H / draft.height);
+  const grid = +$('grid').value;
+  wrap.innerHTML = '';
+  stage = document.createElement('div');
+  stage.className = 'stage edit' + (grid ? ' grid' : '');
+  stage.style.width = draft.width * scale + 'px';
+  stage.style.height = draft.height * scale + 'px';
+  if (grid) stage.style.backgroundSize = `${grid * scale}px ${grid * scale}px`;
+  stage.dataset.scale = scale;
+  stage.onpointerdown = (e) => { if (e.target === stage) { selId = null; renderStage(); renderProps(); } };
+  buildLayout(stage, draft, scale, true, drawList);
+  wrap.appendChild(stage);
+}
+function snap(v) { const s = +$('grid').value; return s ? Math.round(v / s) * s : Math.round(v); }
+function startDrag(e, g, mode) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (selId !== g.id) { selId = g.id; renderStage(); renderProps(); }
+  const scale = +stage.dataset.scale;
+  const start = { x: e.clientX, y: e.clientY, gx: g.x, gy: g.y, gw: g.w, gh: g.h };
+  let moved = false;
+  const onMove = (ev) => {
+    const dx = (ev.clientX - start.x) / scale, dy = (ev.clientY - start.y) / scale;
+    if (!moved && Math.abs(dx) + Math.abs(dy) < 2) return;
+    moved = true;
+    if (mode === 'move') {
+      g.x = clamp(snap(start.gx + dx), 0, draft.width - g.w);
+      g.y = clamp(snap(start.gy + dy), 0, draft.height - g.h);
+    } else {
+      let w = Math.max(40, snap(start.gw + dx)), h = Math.max(40, snap(start.gh + dy));
+      const round = $('square').checked && g.type !== 'glass';
+      if (round) w = h = Math.max(w, h);
+      g.w = Math.min(w, draft.width - g.x);
+      g.h = Math.min(h, draft.height - g.y);
+      if (round) g.w = g.h = Math.min(g.w, g.h);
+    }
+    const el = stage.querySelector('.g.sel');
+    Object.assign(el.style, { left: g.x * scale + 'px', top: g.y * scale + 'px', width: g.w * scale + 'px', height: g.h * scale + 'px' });
+  };
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    if (moved) { markDirty(); renderProps(); }
+  };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+}
+window.addEventListener('resize', () => { renderStage(); if ($('preview').classList.contains('open')) renderPreview(); });
+
+// ---- preview of all screens ----
+$('btnPreview').onclick = () => { $('preview').classList.add('open'); renderPreview(); };
+// Screen edits (names, layouts, added screens) show in the preview before they are saved.
+function refreshPreview() { if ($('preview').classList.contains('open')) renderPreview(); }
+$('btnClosePreview').onclick = () => { $('preview').classList.remove('open'); updateSubs(); };
+function renderPreview() {
+  const grid = $('previewGrid');
+  previewList = [];
+  grid.innerHTML = '';
+  const list = screensDraft && screensDraft.length ? screensDraft : screens;
+  if (!list.length) { grid.innerHTML = '<div class="empty">No screens.</div>'; return; }
+  // Size the cards so all screens fit: try 1..n columns and keep the biggest.
+  const W = grid.clientWidth - 36, H = grid.clientHeight - 36, n = list.length;
+  let best = { cols: 1, w: 0 };
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const w = Math.min((W - (cols - 1) * 18) / cols, ((H - rows * 30 - (rows - 1) * 18) / rows) * 1.5);
+    if (w > best.w) best = { cols, w };
+  }
+  for (const s of list) {
+    const layout = s.steam ? (s.steam === currentId && draft ? draft : layouts.find((l) => l.id === s.steam)) : null;
+    const card = document.createElement('div');
+    card.className = 'card';
+    const lname = layout ? (layout === draft && dirty ? `${layout.name} (unsaved)` : layout.name) : '(no steam layout)';
+    card.innerHTML = `<div class="t"><b>${esc(s.name || 'Screen ' + s.id)}</b> · ${esc(lname)}${s.glass ? ` · glass: ${esc(displayNames[s.glass] || s.glass.toUpperCase())}` : ''}</div>`;
+    const box = document.createElement('div');
+    box.className = 'screenbox';
+    const bw = best.w, bh = layout ? (bw * layout.height) / layout.width : bw / 1.5;
+    box.style.width = bw + 'px';
+    box.style.height = bh + 'px';
+    if (layout) {
+      const inner = document.createElement('div');
+      inner.style.position = 'relative';
+      inner.style.width = bw + 'px';
+      inner.style.height = bh + 'px';
+      buildLayout(inner, layout, bw / layout.width, false, previewList);
+      for (const cap of inner.querySelectorAll('.cap')) cap.remove(); // the screens show no captions
+      box.appendChild(inner);
+    } else {
+      box.innerHTML = '<div class="none">No steam layout assigned</div>';
+    }
+    card.appendChild(box);
+    grid.appendChild(card);
+  }
+  drawAll(previewList); // draw straight away, not on the next animation frame
+}
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if ($('insert').classList.contains('open')) closeInsert();
+  else $('preview').classList.remove('open');
+});
+
+// ---- properties panel ----
+// ---- insert window: every steam gauge and glass display, with live thumbnails ----
+let insertList = [];         // [{canvas, g}] thumbnails
+function openInsert() {
+  if (!draft) return;
+  $('insert').classList.add('open');
+  renderInsert();
+  updateSubs();
+}
+function closeInsert() { $('insert').classList.remove('open'); updateSubs(); }
+$('btnInsert').onclick = openInsert;
+$('btnCloseInsert').onclick = closeInsert;
+$('insert').onpointerdown = (e) => { if (e.target === $('insert')) closeInsert(); };
+const openGroups = new Map(); // aircraft group -> open (remembered while the page is open)
+let insertKey = '';            // what renderInsert last drew, to skip identical redraws
+$('insFilter').oninput = () => renderInsert();
+function renderInsert() {
+  const filter = $('insFilter').value.trim().toLowerCase();
+  const key = JSON.stringify([catalog, Object.values(displayInfo).map((d) => [d.id, d.live, d.width, d.height]), filter, dataMode]);
+  if (key === insertKey && insertList.length) return;
+  insertKey = key;
+  insertList = [];
+  $('insertHint').textContent = dataMode === 'demo' ? 'Steam gauges: demo flight' : 'Steam gauges: live sim data';
+  const hit = (...texts) => !filter || texts.some((t) => String(t || '').toLowerCase().includes(filter));
+  const card = (container, label, sub, g, glass, onOff, title) => {
+    const el = document.createElement('button');
+    el.className = 'card' + (glass ? ' glass' : '');
+    if (title) el.title = title;
+    el.innerHTML = `<canvas></canvas><span class="n">${esc(label)}</span>${sub ? `<span class="s ${onOff ? 'on' : ''}">${esc(sub)}</span>` : ''}`;
+    el.onclick = () => { closeInsert(); addGauge(g.type, clone(g.options)); };
+    container.appendChild(el);
+    insertList.push({ canvas: el.querySelector('canvas'), g });
+  };
+  const glassBox = $('insGlass'), steamBox = $('insSteam'), dialBox = $('insDials');
+  glassBox.innerHTML = steamBox.innerHTML = dialBox.innerHTML = '';
+  renderGlassCatalog(glassBox, card, hit, filter);
+  for (const [t, n] of Object.entries(TYPES)) {
+    if (t === 'dial') continue;
+    if (hit(n, 'steam gauge')) card(steamBox, n, '', { type: t, options: t === 'cdi' ? { nav: 1 } : {} });
+    if (t === 'cdi' && hit('VOR / ILS 2')) card(steamBox, 'VOR / ILS 2', '', { type: t, options: { nav: 2 } });
+  }
+  for (const [n, o] of Object.entries(PRESETS)) if (hit(n, o.label, 'dial')) card(dialBox, n, '', { type: 'dial', options: o });
+  if (hit('Blank dial')) card(dialBox, 'Blank dial', 'set it up yourself', { type: 'dial', options: { var: 'rpm', label: 'DIAL', min: 0, max: 100, majorStep: 20, minorStep: 5 } });
+  if (!steamBox.children.length) steamBox.innerHTML = '<div class="hint">None match.</div>';
+  if (!dialBox.children.length) dialBox.innerHTML = '<div class="hint">None match.</div>';
+  drawAll(insertList);
+}
+
+// Glass displays in the Insert window: the loaded cockpit's on top (while the sim runs), then one
+// group per aircraft seen on this computer, most recently flown first. A display in several aircraft
+// shows in each of their groups.
+function renderGlassCatalog(box, card, hit, filter) {
+  const glassCard = (container, id, inGroup) => {
+    const d = catalog?.displays[id] || {};
+    const info = displayInfo[id] || {};
+    const live = !!info.live;
+    const others = (d.aircraft || []).filter((a) => a !== inGroup);
+    const sub = live ? `live · ${info.width}×${info.height}` : d.thumbAt ? 'saved picture' : 'no picture yet';
+    const also = others.length ? ` · also in ${others.length} other aircraft` : '';
+    const title = (d.aircraft || []).length ? `Seen in:\n${d.aircraft.join('\n')}` : 'Not seen in an aircraft yet';
+    card(container, displayNames[id] || d.name || id.toUpperCase(), sub + also, { type: 'glass', options: { display: id, fit: 'contain' } }, true, live, title);
+  };
+  const group = (name, meta, ids, { now = false, defaultOpen = false } = {}) => {
+    const nameHit = hit(name);
+    const shown = ids.filter((id) => nameHit || hit(displayNames[id], catalog?.displays[id]?.name, id));
+    if (!shown.length) return;
+    const el = document.createElement('details');
+    el.className = 'grp' + (now ? ' now' : '');
+    el.open = filter ? true : openGroups.get(name) ?? defaultOpen;
+    el.innerHTML = `<summary><span class="an">${esc(name)}</span><span class="am">${esc(meta)}</span></summary><div class="cards"></div>`;
+    el.ontoggle = () => { if (!filter) openGroups.set(name, el.open); drawAll(insertList); };
+    box.appendChild(el);
+    for (const id of shown) glassCard(el.querySelector('.cards'), id, now ? catalog.aircraft : name);
+  };
+  const note = (text) => box.insertAdjacentHTML('beforeend', `<div class="hint">${esc(text)}</div>`);
+  const count = (n) => `${n} display${n === 1 ? '' : 's'}`;
+
+  if (!catalog) { // older host: a flat list
+    group('All displays', '', displayIds, { defaultOpen: true });
+    return;
+  }
+  if (!Object.keys(catalog.displays).length) return note('No glass displays known yet. Fly a glass cockpit with the host running and they appear here.');
+
+  const current = catalog.simRunning ? catalog.aircraft : null;
+  if (catalog.simRunning) {
+    if (catalog.present.length) group(current ? `In the ${current} now` : 'In the cockpit now', `${count(catalog.present.length)} · live`, catalog.present, { now: true, defaultOpen: true });
+    else note(`${current ? `The ${current}` : 'The loaded cockpit'} has no glass displays reported (steam gauges only, or still loading).`);
+  } else note('The sim is not running: displays show the last picture saved.');
+
+  const others = catalog.aircraftList.filter((a) => a.name !== current);
+  const before = box.children.length;
+  for (const [n, a] of others.entries()) {
+    const when = a.lastSeen ? new Date(a.lastSeen).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+    group(a.name, [count(a.displays.length), when && `last flown ${when}`].filter(Boolean).join(' · '), a.displays, { defaultOpen: others.length <= 4 || (n === 0 && !current) });
+  }
+  if (box.children.length > before) box.children[before].insertAdjacentHTML('beforebegin', `<h3 class="hint" style="margin:12px 0 0">${current ? 'Seen in other aircraft' : 'Seen in these aircraft'}</h3>`);
+  const loose = Object.keys(catalog.displays).filter((id) => !catalog.displays[id].aircraft.length && !catalog.present.includes(id));
+  group('Not seen in an aircraft yet', count(loose.length), loose);
+  if (filter && !box.querySelector('details')) note('No display matches.');
+}
+
+function addGauge(type, options) {
+  if (!draft) return;
+  // Glass items take the shape of their picture (or of the picked part); round gauges are square.
+  let w = type === 'dial' ? 200 : 300, h = w;
+  if (type === 'glass') {
+    const [pw, ph] = pictureSize(options?.display);
+    w = 400;
+    h = Math.round((400 * ph) / pw);
+  }
+  // First free spot on a 50-unit grid, scanning left to right, top to bottom.
+  let px = 0, py = 0, found = false;
+  for (let y = 0; y + h <= draft.height && !found; y += 50)
+    for (let x = 0; x + w <= draft.width; x += 50)
+      if (!draft.gauges.some((g) => x < g.x + g.w && x + w > g.x && y < g.y + g.h && y + h > g.y)) { px = x; py = y; found = true; break; }
+  let n = 1;
+  while (draft.gauges.some((g) => g.id === `${type}${n}`)) n++;
+  const g = { id: `${type}${n}`, type, x: px, y: py, w, h, options: options ?? (type === 'dial' ? clone(PRESETS['Fuel left']) : type === 'cdi' ? { nav: 1 } : {}) };
+  draft.gauges.push(g);
+  selId = g.id;
+  markDirty();
+  renderStage();
+  renderProps();
+}
+
+function renderProps() {
+  const p = $('props');
+  if (!draft) { p.innerHTML = ''; return; }
+  const g = draft.gauges.find((x) => x.id === selId);
+  let h = `<h2>Layout</h2>
+    <label class="f">Name <input id="lName" value="${esc(draft.name)}"></label>
+    <label class="f">Size <span class="row" style="flex-wrap:nowrap"><input id="lW" type="number" value="${draft.width}" min="100" max="10000"> × <input id="lH" type="number" value="${draft.height}" min="100" max="10000"></span></label>
+    <div class="hint">The whole layout is scaled to fit each screen, keeping this shape. 1200 × 800 suits a 3:2 screen; use 1280 × 720 for 16:9 or 1024 × 768 for 4:3.</div>`;
+  if (!g) {
+    h += `<h2>Gauge</h2><div class="hint">Click a gauge to edit it, drag to move, drag the corner to resize. Arrow keys nudge, Delete removes, Ctrl+S saves.</div>`;
+  } else {
+    const o = g.options || (g.options = {});
+    h += `<h2>${g.type === 'glass' ? 'Glass display' : `Gauge: ${esc(TYPES[g.type] || g.type)}`}</h2>
+      <label class="f">Position <span class="row" style="flex-wrap:nowrap"><input data-g="x" type="number" value="${g.x}"><input data-g="y" type="number" value="${g.y}"></span></label>
+      <label class="f">Size <span class="row" style="flex-wrap:nowrap"><input data-g="w" type="number" value="${g.w}"><input data-g="h" type="number" value="${g.h}"></span></label>`;
+    if (g.type === 'glass') h += glassProps(o);
+    else if (g.type === 'dial') h += dialProps(o);
+    else if (g.type === 'asi') h += `<div class="hint">Arcs come from the sim: white Vs0–Vfe, green Vs1–Vno, yellow Vno–Vne, red line at Vne. Vfe/Vno come from the host's aircraft profiles (estimated if the aircraft is unknown). Fill these in only to override.</div>
+        ${numField('max', 'Scale max', o.max, 'auto')}
+        ${rangeField('white', 'White arc', o.white)}${rangeField('green', 'Green arc', o.green)}${rangeField('yellow', 'Yellow arc', o.yellow)}
+        ${numField('vne', 'Red line', o.vne, 'from sim')}`;
+    else if (g.type === 'vsi') h += numField('max', 'Full scale', o.max, '2000');
+    else if (g.type === 'cdi') h += `<label class="f">Radio <select data-o="nav" data-num="1" data-rerender="1"><option value="1" ${(o.nav || 1) == 1 ? 'selected' : ''}>NAV 1</option><option value="2" ${o.nav == 2 ? 'selected' : ''}>NAV 2</option></select></label>`;
+    else if (g.type === 'clock') h += `<label class="f">Time <select data-o="zone"><option value="local" ${o.zone !== 'zulu' ? 'selected' : ''}>Local</option><option value="zulu" ${o.zone === 'zulu' ? 'selected' : ''}>UTC</option></select></label>`;
+    h += `<div class="row" style="margin-top:12px"><button id="gDup">Duplicate</button><button id="gDel" class="danger">Remove</button></div>`;
+  }
+  p.innerHTML = h;
+
+  $('lName').oninput = (e) => { draft.name = e.target.value.slice(0, 80) || draft.id; markDirty(); };
+  $('lW').onchange = (e) => { draft.width = clamp(+e.target.value || 1200, 100, 10000); markDirty(); renderStage(); };
+  $('lH').onchange = (e) => { draft.height = clamp(+e.target.value || 800, 100, 10000); markDirty(); renderStage(); };
+  if (!g) return;
+  for (const el of p.querySelectorAll('[data-g]')) el.onchange = () => { g[el.dataset.g] = Math.max(el.dataset.g === 'w' || el.dataset.g === 'h' ? 10 : -10000, +el.value || 0); markDirty(); renderStage(); };
+  for (const el of p.querySelectorAll('[data-o]')) {
+    el.onchange = () => {
+      const k = el.dataset.o;
+      if (el.type === 'checkbox') g.options[k] = el.checked;
+      else if (el.value === '') delete g.options[k];
+      else g.options[k] = el.dataset.num ? +el.value : el.value;
+      markDirty(); renderStage(); if (el.dataset.rerender) renderProps();
+    };
+  }
+  for (const el of p.querySelectorAll('[data-range]')) {
+    el.onchange = () => {
+      const k = el.dataset.range, [a, b] = [...p.querySelectorAll(`[data-range="${k}"]`)].map((i) => i.value);
+      if (a === '' || b === '') delete g.options[k]; else g.options[k] = [+a, +b];
+      markDirty(); renderStage();
+    };
+  }
+  if (g.type === 'glass') wireGlassProps(g);
+  const preset = $('preset');
+  if (preset) preset.onchange = () => { if (preset.value) { g.options = clone(PRESETS[preset.value]); markDirty(); renderStage(); renderProps(); } };
+  for (const el of p.querySelectorAll('[data-arc]')) {
+    el.onchange = () => {
+      const [i, k] = el.dataset.arc.split(':');
+      g.options.arcs[i][k] = k === 'color' ? el.value : +el.value;
+      markDirty(); renderStage();
+    };
+  }
+  for (const b of p.querySelectorAll('[data-arcdel]')) b.onclick = () => { g.options.arcs.splice(+b.dataset.arcdel, 1); markDirty(); renderStage(); renderProps(); };
+  const addArc = $('addArc');
+  if (addArc) addArc.onclick = () => { (g.options.arcs ||= []).push({ from: g.options.min ?? 0, to: g.options.max ?? 100, color: 'green' }); markDirty(); renderStage(); renderProps(); };
+  $('gDel').onclick = () => { draft.gauges = draft.gauges.filter((x) => x !== g); selId = null; markDirty(); renderStage(); renderProps(); };
+  $('gDup').onclick = () => {
+    const c = clone(g);
+    let n = 1; while (draft.gauges.some((x) => x.id === `${g.type}${n}`)) n++;
+    c.id = `${g.type}${n}`; c.x = Math.min(g.x + 50, draft.width - g.w); c.y = Math.min(g.y + 50, draft.height - g.h);
+    draft.gauges.push(c); selId = c.id; markDirty(); renderStage(); renderProps();
+  };
+}
+function numField(k, label, v, placeholder) {
+  return `<label class="f">${esc(label)} <input data-o="${k}" data-num="1" type="number" step="any" value="${v ?? ''}" placeholder="${esc(placeholder ?? '')}"></label>`;
+}
+function textField(k, label, v) { return `<label class="f">${esc(label)} <input data-o="${k}" value="${esc(v ?? '')}"></label>`; }
+function rangeField(k, label, v) {
+  return `<label class="f">${esc(label)} <span class="row" style="flex-wrap:nowrap"><input data-range="${k}" type="number" step="any" value="${v?.[0] ?? ''}" placeholder="from sim"><input data-range="${k}" type="number" step="any" value="${v?.[1] ?? ''}" placeholder="from sim"></span></label>`;
+}
+function varOptions(selected, allowNone) {
+  const opts = (allowNone ? [{ key: '', name: '(none)', unit: '' }] : []).concat(varInfo.length ? varInfo : [{ key: selected || '', name: selected || '', unit: '' }]);
+  return opts.map((v) => `<option value="${esc(v.key)}" ${v.key === (selected ?? '') ? 'selected' : ''}>${esc(v.key ? `${v.key} — ${v.name.toLowerCase()}${v.unit ? ` (${v.unit})` : ''}` : v.name)}</option>`).join('');
+}
+function dialProps(o) {
+  const arcs = (o.arcs || []).map((a, i) => `<div class="arc">
+      <input data-arc="${i}:from" type="number" step="any" value="${a.from}">
+      <input data-arc="${i}:to" type="number" step="any" value="${a.to}">
+      <select data-arc="${i}:color">${COLORS.map((c) => `<option ${c === a.color ? 'selected' : ''}>${c}</option>`).join('')}</select>
+      <button data-arcdel="${i}" title="Remove arc">×</button></div>`).join('');
+  return `<label class="f">Preset <select id="preset"><option value="">(choose to fill in)</option>${Object.keys(PRESETS).map((n) => `<option>${esc(n)}</option>`).join('')}</select></label>
+    <label class="f">Value <select data-o="var" data-rerender="1">${varOptions(o.var)}</select></label>
+    <div class="hint">Now: <span class="live" id="liveVal">–</span></div>
+    ${textField('label', 'Label', o.label)}${textField('sublabel', 'Units text', o.sublabel)}
+    ${numField('min', 'Min', o.min)}${numField('max', 'Max', o.max)}
+    ${numField('majorStep', 'Numbers every', o.majorStep)}${numField('minorStep', 'Ticks every', o.minorStep)}
+    ${numField('labelScale', 'Number scale', o.labelScale, '1 (0.01 shows 2500 as 25)')}
+    ${numField('decimals', 'Decimals', o.decimals, '0')}
+    <label class="f">Red line at <select data-o="redlineVar">${varOptions(o.redlineVar, true)}</select></label>
+    <label class="f">Readout <span><input type="checkbox" data-o="showValue" ${o.showValue !== false ? 'checked' : ''}> show the number</span></label>
+    <h2>Colour arcs</h2><div class="hint">from · to · colour</div>${arcs}<button id="addArc">Add arc</button>`;
+}
+function glassProps(o) {
+  const ids = [...new Set([...displayIds, o.display].filter(Boolean))];
+  const c = cropOf(o);
+  const pct = (v) => Math.round(v * 1000) / 10;
+  const opt = (id) => `<option value="${esc(id)}" ${id === o.display ? 'selected' : ''}>${esc(displayNames[id] || id.toUpperCase())}</option>`;
+  const here = catalog?.simRunning ? ids.filter((id) => catalog.present.includes(id)) : [];
+  const rest = ids.filter((id) => !here.includes(id));
+  const options = here.length ? `<optgroup label="In this cockpit">${here.map(opt).join('')}</optgroup><optgroup label="Other displays">${rest.map(opt).join('')}</optgroup>` : ids.map(opt).join('');
+  return `<label class="f">Display <select data-o="display" data-rerender="1">${options}</select></label>
+    <label class="f">Fit <select data-o="fit">
+      <option value="contain" ${(o.fit || 'contain') === 'contain' ? 'selected' : ''}>Keep shape, show all</option>
+      <option value="cover" ${o.fit === 'cover' ? 'selected' : ''}>Keep shape, fill (cuts edges)</option>
+      <option value="fill" ${o.fit === 'fill' ? 'selected' : ''}>Stretch to the box</option></select></label>
+    <h2>Part of the display</h2>
+    <div class="hint">Drag on the picture to pick the part to show, for example just the ADF frequency.</div>
+    <canvas id="cropCv"></canvas>
+    <div class="row"><button id="cropAll">Whole display</button><button id="cropShape" title="Set the item's height so the picked part is not squeezed">Match item to part</button></div>
+    <label class="f">Left, top % <span class="row" style="flex-wrap:nowrap"><input data-crop="x" type="number" step="0.1" value="${pct(c.x)}"><input data-crop="y" type="number" step="0.1" value="${pct(c.y)}"></span></label>
+    <label class="f">Width, height % <span class="row" style="flex-wrap:nowrap"><input data-crop="w" type="number" step="0.1" value="${pct(c.w)}"><input data-crop="h" type="number" step="0.1" value="${pct(c.h)}"></span></label>`;
+}
+function setCrop(g, c) {
+  const x = clamp(c.x, 0, 0.99), y = clamp(c.y, 0, 0.99);
+  const w = clamp(c.w, 0.01, 1 - x), h = clamp(c.h, 0.01, 1 - y);
+  if (x === 0 && y === 0 && w >= 0.999 && h >= 0.999) delete g.options.crop;
+  else g.options.crop = { x, y, w, h };
+}
+function wireGlassProps(g) {
+  const cv = $('cropCv');
+  const [pw, ph] = pictureSize(g.options.display);
+  cv.style.aspectRatio = `${pw} / ${ph}`;
+  const at = (e) => { const r = cv.getBoundingClientRect(); return { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) }; };
+  cv.onpointerdown = (e) => {
+    e.preventDefault();
+    cv.setPointerCapture(e.pointerId);
+    const a = at(e);
+    const move = (ev) => {
+      const b = at(ev);
+      if (Math.abs(b.x - a.x) < 0.01 || Math.abs(b.y - a.y) < 0.01) return;
+      setCrop(g, { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) });
+    };
+    const up = () => { cv.removeEventListener('pointermove', move); cv.removeEventListener('pointerup', up); markDirty(); renderStage(); renderProps(); };
+    cv.addEventListener('pointermove', move);
+    cv.addEventListener('pointerup', up);
+  };
+  $('cropAll').onclick = () => { delete g.options.crop; markDirty(); renderStage(); renderProps(); };
+  $('cropShape').onclick = () => {
+    const c = cropOf(g.options);
+    g.h = clamp(Math.round((g.w * c.h * ph) / (c.w * pw)), 10, draft.height - g.y);
+    markDirty(); renderStage(); renderProps();
+  };
+  for (const el of $('props').querySelectorAll('[data-crop]')) {
+    el.onchange = () => {
+      const c = { ...cropOf(g.options) };
+      c[el.dataset.crop] = (+el.value || 0) / 100;
+      setCrop(g, c);
+      markDirty(); renderStage(); renderProps();
+    };
+  }
+}
+// The crop picker: the whole picture, dimmed outside the picked part.
+function drawCrop() {
+  const cv = $('cropCv');
+  if (!cv) return;
+  const g = draft?.gauges.find((x) => x.id === selId);
+  if (!g || g.type !== 'glass') return;
+  const dpr = sizeCanvas(cv);
+  const ctx = cv.getContext('2d');
+  const w = cv.clientWidth, h = cv.clientHeight;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawGlass(ctx, w, h, { display: g.options.display, fit: 'fill' });
+  const c = cropOf(g.options);
+  ctx.fillStyle = '#000000a8';
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.rect(c.x * w, c.y * h, c.w * w, c.h * h);
+  ctx.fill('evenodd');
+  ctx.strokeStyle = '#f0b429';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(c.x * w, c.y * h, c.w * w, c.h * h);
+}
+function updateLive() {
+  const el = $('liveVal');
+  if (!el) return;
+  const g = draft?.gauges.find((x) => x.id === selId);
+  if (!g?.options?.var) return;
+  el.textContent = V.live ? `${(+V.get(g.options.var)).toFixed(2)} (${dataMode === 'demo' ? 'demo' : 'live'})` : 'no data (sim not running? try Demo)';
+}
+
+// ---- keyboard ----
+window.addEventListener('keydown', (e) => {
+  if ($('preview').classList.contains('open')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); return; }
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+  const g = draft?.gauges.find((x) => x.id === selId);
+  if (!g) return;
+  const step = e.shiftKey ? 1 : (+$('grid').value || 10);
+  const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+  if (moves[e.key]) {
+    e.preventDefault();
+    g.x = clamp(g.x + moves[e.key][0], 0, draft.width - g.w);
+    g.y = clamp(g.y + moves[e.key][1], 0, draft.height - g.h);
+    markDirty(); renderStage(); renderProps();
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    draft.gauges = draft.gauges.filter((x) => x !== g); selId = null; markDirty(); renderStage(); renderProps();
+  }
+});
+window.addEventListener('beforeunload', (e) => { if (dirty || screensDirty) { e.preventDefault(); e.returnValue = ''; } });
+
+let saved = 'demo';
+try { saved = localStorage.getItem('clEditorData') || 'demo'; } catch {}
+setDataMode(saved === 'live' ? 'live' : 'demo');
+connect();
+// A hidden tab (minimised, another tab in front) costs the sim nothing: previews and the catalog's
+// picture grabs stop, and start again when the tab is shown.
+document.addEventListener('visibilitychange', () => {
+  send({ type: document.hidden ? 'unsubscribeCatalog' : 'subscribeCatalog' });
+  updateSubs();
+});
+</script>
+</body>
+</html>

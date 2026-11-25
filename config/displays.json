@@ -1,0 +1,17 @@
+{
+  "_comment": "Single source for display ids, instrument element tags and marker colours. Used by hook/build-hook.mjs (painted by the hook) and by the host (sent to capture.dll). Rebuild the hook after changing it.",
+  "displays": [
+    {
+      "id": "pfd",
+      "name": "PFD",
+      "tags": ["wtg1000-pfd"],
+      "marker": [[201, 13, 77], [17, 190, 233]]
+    },
+    {
+      "id": "mfd",
+      "name": "MFD",
+      "tags": ["wtg1000-mfd"],
+      "marker": [[77, 201, 13], [233, 17, 190]]
+    }
+  ]
+}

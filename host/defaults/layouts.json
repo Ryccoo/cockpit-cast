@@ -1,0 +1,38 @@
+{
+  "layouts": [
+    {
+      "id": "six-pack",
+      "name": "Six-pack",
+      "width": 1200,
+      "height": 800,
+      "gauges": [
+        { "id": "asi", "type": "asi", "x": 0, "y": 0, "w": 400, "h": 400, "options": {} },
+        { "id": "ai", "type": "attitude", "x": 400, "y": 0, "w": 400, "h": 400, "options": {} },
+        { "id": "alt", "type": "altimeter", "x": 800, "y": 0, "w": 400, "h": 400, "options": {} },
+        { "id": "tc", "type": "turn", "x": 0, "y": 400, "w": 400, "h": 400, "options": {} },
+        { "id": "hi", "type": "heading", "x": 400, "y": 400, "w": 400, "h": 400, "options": {} },
+        { "id": "vsi", "type": "vsi", "x": 800, "y": 400, "w": 400, "h": 400, "options": { "max": 2000 } }
+      ]
+    },
+    {
+      "id": "engine-radios",
+      "name": "Engine and radios",
+      "width": 1200,
+      "height": 800,
+      "gauges": [
+        { "id": "vor1", "type": "cdi", "x": 0, "y": 0, "w": 400, "h": 400, "options": { "nav": 1 } },
+        { "id": "vor2", "type": "cdi", "x": 400, "y": 0, "w": 400, "h": 400, "options": { "nav": 2 } },
+        { "id": "adf", "type": "adf", "x": 800, "y": 0, "w": 400, "h": 400, "options": {} },
+        { "id": "tach", "type": "dial", "x": 0, "y": 400, "w": 400, "h": 400, "options": { "var": "rpm", "label": "RPM", "sublabel": "x100", "min": 0, "max": 3500, "majorStep": 500, "minorStep": 100, "labelScale": 0.01, "redlineVar": "maxRpm", "arcs": [{ "from": 2100, "to": 2700, "color": "green" }] } },
+        { "id": "fuelL", "type": "dial", "x": 400, "y": 400, "w": 200, "h": 200, "options": { "var": "fuelL", "label": "FUEL L", "sublabel": "GAL", "min": 0, "max": 28, "majorStep": 7, "minorStep": 3.5, "arcs": [{ "from": 0, "to": 3, "color": "red" }] } },
+        { "id": "fuelR", "type": "dial", "x": 600, "y": 400, "w": 200, "h": 200, "options": { "var": "fuelR", "label": "FUEL R", "sublabel": "GAL", "min": 0, "max": 28, "majorStep": 7, "minorStep": 3.5, "arcs": [{ "from": 0, "to": 3, "color": "red" }] } },
+        { "id": "oilT", "type": "dial", "x": 800, "y": 400, "w": 200, "h": 200, "options": { "var": "oilTemp", "label": "OIL T", "sublabel": "°F", "min": 50, "max": 250, "majorStep": 50, "minorStep": 25, "arcs": [{ "from": 100, "to": 245, "color": "green" }, { "from": 245, "to": 250, "color": "red" }] } },
+        { "id": "oilP", "type": "dial", "x": 1000, "y": 400, "w": 200, "h": 200, "options": { "var": "oilPress", "label": "OIL P", "sublabel": "PSI", "min": 0, "max": 120, "majorStep": 20, "minorStep": 10, "arcs": [{ "from": 0, "to": 20, "color": "red" }, { "from": 50, "to": 90, "color": "green" }, { "from": 115, "to": 120, "color": "red" }] } },
+        { "id": "egt", "type": "dial", "x": 400, "y": 600, "w": 200, "h": 200, "options": { "var": "egt", "label": "EGT", "sublabel": "°F", "min": 1000, "max": 1800, "majorStep": 200, "minorStep": 50, "decimals": 0 } },
+        { "id": "ff", "type": "dial", "x": 600, "y": 600, "w": 200, "h": 200, "options": { "var": "fuelFlow", "label": "FUEL FLOW", "sublabel": "GPH", "min": 0, "max": 20, "majorStep": 5, "minorStep": 1, "decimals": 1 } },
+        { "id": "vac", "type": "dial", "x": 800, "y": 600, "w": 200, "h": 200, "options": { "var": "suction", "label": "VAC", "sublabel": "IN HG", "min": 3, "max": 7, "majorStep": 1, "minorStep": 0.5, "decimals": 1, "arcs": [{ "from": 4.5, "to": 5.5, "color": "green" }] } },
+        { "id": "amps", "type": "dial", "x": 1000, "y": 600, "w": 200, "h": 200, "options": { "var": "amps", "label": "AMPS", "sublabel": "", "min": -60, "max": 60, "majorStep": 30, "minorStep": 10, "decimals": 0 } }
+      ]
+    }
+  ]
+}

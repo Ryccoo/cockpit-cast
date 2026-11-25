@@ -1,0 +1,27 @@
+name: cockpit_link
+description: "Cockpit Link client: shows MSFS cockpit displays and steam gauges streamed from the Cockpit Link host."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.14.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.1.0
+  multicast_dns: ^0.3.3+1
+  screen_retriever: 0.2.0
+  shared_preferences: ^2.5.6
+  url_launcher: ^6.3.3
+  wakelock_plus: ^1.8.2
+  web_socket_channel: ^3.0.3
+  window_manager: 0.4.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

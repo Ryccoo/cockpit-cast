@@ -1,0 +1,28 @@
+{
+  "name": "cockpit-link-host",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "funding": {
+    "type": "ko-fi",
+    "url": "https://ko-fi.com/richardludvigh"
+  },
+  "description": "Cockpit Link host: receives captured cockpit display frames and streams them to client apps over the LAN.",
+  "type": "module",
+  "main": "src/index.mjs",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "fake-capture": "node tools/fake-capture.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bonjour-service": "^1.3.0",
+    "node-simconnect": "^4.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^0.1.65"
+  }
+}

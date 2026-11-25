@@ -1,0 +1,12 @@
+{
+  "_comment": "Speeds MSFS does not expose as SimVars (Vfe, Vno), per aircraft, in knots (KIAS), from the published POH figures. Matched against the aircraft folder name (regular expression, case-insensitive), first match wins. Vs0, Vs1 and Vne (barber pole) always come from the sim itself. Unknown aircraft: the client estimates Vfe ~ 2.1 x Vs0 and Vno ~ Vne / 1.25 and labels them as estimates.",
+  "aircraft": [
+    { "match": "c152", "name": "Cessna 152", "vfe": 85, "vno": 111 },
+    { "match": "c172", "name": "Cessna 172", "vfe": 85, "vno": 129 },
+    { "match": "c182", "name": "Cessna 182", "vfe": 95, "vno": 140 },
+    { "match": "pa-?28.*(archer|181)", "name": "Piper PA-28-181 Archer", "vfe": 103, "vno": 125 },
+    { "match": "pa-?28", "name": "Piper PA-28", "vfe": 103, "vno": 125 },
+    { "match": "da-?40", "name": "Diamond DA40", "vfe": 108, "vno": 129 },
+    { "match": "bonanza|g36", "name": "Beechcraft Bonanza G36", "vfe": 123, "vno": 165 }
+  ]
+}

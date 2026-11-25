@@ -1,0 +1,18 @@
+Cockpit Link includes the following third-party software. Each keeps its own licence.
+
+Host (sim PC)
+  Node.js runtime (node\node.exe)        MIT licence and others, https://github.com/nodejs/node/blob/main/LICENSE
+  ws (WebSocket library)                 MIT licence, https://github.com/websockets/ws
+  bonjour-service (network discovery)    MIT licence, https://github.com/onlxltd/bonjour-service
+  node-simconnect (SimConnect protocol)  LGPL-3.0, https://github.com/EvenAR/node-simconnect
+                                         Its source is included in host\node_modules\node-simconnect.
+
+Client (display PCs)
+  Flutter engine and framework           BSD 3-Clause licence, https://github.com/flutter/flutter
+  Flutter packages used by the client    see client\pubspec.yaml in the source; BSD or MIT licences
+  Microsoft Visual C++ runtime           msvcp140.dll, vcruntime140.dll, vcruntime140_1.dll:
+                                         redistributable files under the Microsoft Visual Studio licence
+
+Microsoft Flight Simulator is a trademark of Microsoft Corporation. Cockpit Link is not affiliated with
+or endorsed by Microsoft or Asobo Studio. Cockpit Link ships no files of the sim: the Community hook is
+built on your PC from your own installation.

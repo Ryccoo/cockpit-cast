@@ -1,0 +1,18 @@
+node_modules/
+hook/dist/
+reference/
+*.log
+injector/build/
+client/build/
+client/.dart_tool/
+capture/build/
+tray/build/
+
+# Private notes for this PC (not published)
+CLAUDE.md
+PLAN.md
+docs/client-hardware.md
+
+# Installer builds
+installer/stage/
+installer/output/
