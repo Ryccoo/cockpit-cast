@@ -32,6 +32,10 @@ $cmake = (Get-Command cmake.exe -ErrorAction SilentlyContinue).Source
 if (-not $cmake) { $cmake = "$vs\Common7\IDE\CommonExtensionTools\Microsoft\CMake\CMake\bin\cmake.exe" }
 if (-not (Test-Path $cmake)) { $cmake = Get-ChildItem -Recurse -Filter cmake.exe $vs -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName }
 if (-not $cmake) { throw 'cmake.exe not found' }
+# The generator for the installed Visual Studio (GitHub's windows-latest has VS 2026, older PCs VS 2022).
+$vsMajor = [int](& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationVersion).Split('.')[0]
+$generator = switch ($vsMajor) { 17 { 'Visual Studio 17 2022' } 18 { 'Visual Studio 18 2026' } default { throw "Visual Studio $vsMajor is not supported by this script" } }
+Write-Host "CMake: $cmake ($generator)"
 $iscc = Find-Tool 'ISCC.exe' @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")
 $node = (Get-Command node.exe).Source
 $flutter = Find-Tool 'flutter.bat' @("$env:USERPROFILE\Tools\flutter\bin\flutter.bat")
@@ -47,7 +51,7 @@ function Run($exe, [string[]]$argList, $dir = $root) {
 # ---- builds ----
 if (-not $SkipBuild) {
   foreach ($p in 'capture', 'injector', 'tray') {
-    if (-not (Test-Path "$root\$p\build")) { Run $cmake @('-S', $p, '-B', "$p/build", '-G', 'Visual Studio 17 2022', '-A', 'x64') }
+    if (-not (Test-Path "$root\$p\build")) { Run $cmake @('-S', $p, '-B', "$p/build", '-G', $generator, '-A', 'x64') }
     Run $cmake @('--build', "$p/build", '--config', 'Release')
   }
   if (-not $SkipClient) { Run $flutter @('build', 'windows', '--release') "$root\client" }
