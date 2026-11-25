@@ -1,5 +1,6 @@
 // Tray icon on Windows: keeps its tooltip and colour up to date. Clicking the icon opens the layout
-// editor; its menu can quit the host (emits 'quit'). See tray/src/tray.cpp. Two ways round:
+// editor; its menu can quit the host (emits 'quit') or install an update (emits 'update'). See
+// tray/src/tray.cpp. Two ways round:
 //   npm start        the host starts the tray program; it exits by itself when the host does.
 //   tray launcher    (installed copies: Start menu, sign-in) the tray program started the host, with
 //                    COCKPIT_LINK_TRAY_PARENT=1, and talks to it over the host's stdin/stdout. When the
@@ -52,10 +53,7 @@ export class Tray extends EventEmitter {
       for (let i; (i = buf.indexOf('\n')) >= 0; ) {
         const line = buf.slice(0, i).trim();
         buf = buf.slice(i + 1);
-        if (line === 'quit') {
-          log.info('quit from the tray menu');
-          this.emit('quit');
-        }
+        this.onLine(line);
       }
     });
     process.stdin.on('end', () => {
@@ -67,8 +65,31 @@ export class Tray extends EventEmitter {
     this.write(`editor ${base}/editor`);
     this.write(`monitor ${base}/`);
     if (this.supportUrl) this.write(`support ${this.supportUrl}`);
+    if (this.updateVersion) this.write(`update ${this.updateVersion}`);
     this.update();
     this.timer = setInterval(() => this.update(), 2000);
+  }
+
+  onLine(line) {
+    if (line === 'quit') {
+      log.info('quit from the tray menu');
+      this.emit('quit');
+    } else if (line === 'update') {
+      log.info('update from the tray menu');
+      this.emit('update');
+    }
+  }
+
+  /// A newer version exists (menu item and a notification), or null.
+  setUpdate(version) {
+    if (version === this.updateVersion) return;
+    this.updateVersion = version;
+    if (version) this.write(`update ${version}`);
+  }
+
+  /// Launcher mode: the tray stops the host, runs this installer (silent update) and exits.
+  install(file) {
+    this.write(`install ${file}`);
   }
 
   spawn() {
@@ -82,10 +103,7 @@ export class Tray extends EventEmitter {
       for (let i; (i = buf.indexOf('\n')) >= 0; ) {
         const line = buf.slice(0, i).trim();
         buf = buf.slice(i + 1);
-        if (line === 'quit') {
-          log.info('quit from the tray menu');
-          this.emit('quit');
-        }
+        this.onLine(line);
       }
     });
     child.on('error', (e) => log.warn(`tray icon: ${e.message}`));
@@ -100,6 +118,7 @@ export class Tray extends EventEmitter {
     this.write(`editor ${base}/editor`);
     this.write(`monitor ${base}/`);
     if (this.supportUrl) this.write(`support ${this.supportUrl}`);
+    if (this.updateVersion) this.write(`update ${this.updateVersion}`);
     this.update();
   }
 

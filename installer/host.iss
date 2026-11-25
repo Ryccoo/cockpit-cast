@@ -54,6 +54,8 @@ Name: "{userstartup}\Cockpit Link"; Filename: "{app}\cockpit-link.exe"; Tasks: s
 
 [Run]
 Filename: "{app}\cockpit-link.exe"; Description: "Start Cockpit Link now"; Flags: postinstall nowait skipifsilent
+; Updates from Cockpit Link itself (/SILENT /UPDATE=1; host/src/updater.mjs): start it again when done.
+Filename: "{app}\cockpit-link.exe"; Flags: nowait; Check: IsUpdate
 
 [UninstallRun]
 Filename: "{app}\node\node.exe"; Parameters: """{app}\hook\install-hook.mjs"" --remove"; WorkingDir: "{app}"; Flags: runhidden; RunOnceId: "RemoveHook"
@@ -62,6 +64,12 @@ Filename: "{app}\node\node.exe"; Parameters: """{app}\hook\install-hook.mjs"" --
 Type: filesandordirs; Name: "{app}\hook\dist"
 
 [Code]
+// Started by Cockpit Link's own updater.
+function IsUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') = '1';
+end;
+
 // The hook is built from the sim's own BaseInstrument.js, so it is made here, on this PC.
 procedure CurStepChanged(CurStep: TSetupStep);
 var

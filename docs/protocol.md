@@ -87,6 +87,7 @@ Client to host:
 { "type": "hello", "client": "Cockpit Pi left", "protocol": 1 }
 { "type": "subscribe", "display": "pfd", "maxFps": 30 }
 { "type": "unsubscribe", "display": "pfd" }
+{ "type": "installUpdate" }   // update banner in the editor or monitor; accepted from the sim PC only
 ```
 
 Host to client:
@@ -97,12 +98,16 @@ Host to client:
 { "type": "status",
   "sim": { "connected": true, "inFlight": true, "paused": false, "aircraft": "...", "liveForSec": 42 },
   "capture": { "connected": true, "source": "capture.dll", "pid": 42164, "injector": "connected" },
-  "hook": { "connected": true, "pages": 2, "displays": ["mfd", "pfd"] } }
+  "hook": { "connected": true, "pages": 2, "displays": ["mfd", "pfd"] },
+  "update": { "current": "0.1.0", "latest": "0.2.0", "available": true, "url": "https://github.com/...",
+              "state": "available", "error": null, "canInstall": true } }
+{ "type": "update" }   // the host is installing a new version: clients that can, update themselves too
 { "type": "error", "message": "unknown display 'xyz'" }
 ```
 
 - `displays` lists every display in `config/displays.json` from the start (width 0 and not live until frames arrive), plus any other id a capture source sends. It is sent on connect and whenever the set, sizes or `live` flags change. A display is live when a frame or UNCHANGED arrived in the last 2 s.
 - `status` is sent on connect and whenever it changes. `capture.injector` is the host's injection state: `waiting-sim`, `waiting-simconnect`, `waiting-flight`, `stabilizing`, `injecting`, `loaded`, `connected`, `failed`, `manual`, `no-dll`, `no-injector`, `error`.
+- `status.update` (host/src/updater.mjs): `state` is `idle`, `available`, `downloading`, `installing` or `error`; `canInstall` is false for copies not installed with the Setup program. The pages show a banner from it; client apps ignore it and act on `update` (client/lib/updater.dart).
 - `maxFps` is 0.2-60 (0.2: one picture every 5 s, for previews); the host never sends a display faster than that to that client. Default 30. Subscriptions also drive capture: a display nobody subscribes to is not captured.
 
 ### Gauge data, layouts and screens (steam gauges; same connection)
@@ -212,10 +217,14 @@ Hook to host:
 The host starts `tray/build/Release/cockpit-link-tray.exe` and talks to it over the program's stdin and
 stdout, one UTF-8 line per message. When the host exits, stdin closes and the tray program exits too.
 
-- Host to tray: `editor <url>`, `monitor <url>` (what the click and the menu open), and
-  `status <idle|sim|live> <tooltip>` (lines separated by a literal `\n`; at most 127 characters). Sent when
-  it changes, checked every 2 s.
-- Tray to host: `quit` (menu *Quit Cockpit Link host*); the host shuts down.
+- Host to tray: `editor <url>`, `monitor <url>` (what the click and the menu open), `support <url>`,
+  `status <idle|sim|live> <tooltip>` (lines separated by a literal `\n`; at most 127 characters; sent when
+  it changes, checked every 2 s), `update <version>` (a newer version can be installed: menu item and a
+  notification) and `install <installer path>` (launcher mode: stop the host, run that installer with
+  `/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /UPDATE=1 /LOG=...`, exit; the installer
+  starts Cockpit Link again).
+- Tray to host: `quit` (menu *Quit Cockpit Link host*; the host shuts down) and `update` (menu
+  *Install update*).
 
 ## HTTP
 

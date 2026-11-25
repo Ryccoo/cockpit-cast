@@ -10,6 +10,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'gauges/gauge_values.dart';
 import 'protocol.dart';
+import 'updater.dart';
 
 enum LinkState { connecting, connected, disconnected }
 
@@ -224,6 +225,9 @@ class HostConnection extends ChangeNotifier {
         gaugeValues.setRefs({if (status.vfe != null) 'vfe': status.vfe!, if (status.vno != null) 'vno': status.vno!});
       case 'error':
         lastError = msg['message'] as String?;
+      case 'update': // the host is installing its update: the display PCs update too
+        Updater.instance.updateFromHost();
+        return;
       case 'layouts':
         layouts = [for (final l in (msg['layouts'] as List? ?? const [])) GaugeLayout.fromJson((l as Map).cast<String, dynamic>())];
       case 'screens':

@@ -24,6 +24,7 @@ import { DisplayCatalog } from './catalog.mjs';
 import { SIMVARS } from './simvars.mjs';
 import { advertise } from './discovery.mjs';
 import { Tray } from './tray.mjs';
+import { Updater } from './updater.mjs';
 import { logToConsole, logToFile, makeLog } from './log.mjs';
 
 const cfg = loadConfig();
@@ -61,7 +62,8 @@ catalog.on('wanted', pushWanted);
 const dataSource = cfg.fakeData ? new FakeData() : sim;
 
 // Sent to client apps (keep small: it is broadcast on every change).
-const getStatus = () => ({ sim: sim.status(), capture: { ...capture.status(), injector: injector.status().state }, hook: hook.status() });
+const updater = new Updater({ cfg, version });
+const getStatus = () => ({ sim: sim.status(), capture: { ...capture.status(), injector: injector.status().state }, hook: hook.status(), update: updater.info() });
 // Extra detail for /api/status only.
 const getDetail = () => ({
   injector: injector.status(),
@@ -92,6 +94,7 @@ const clients = new ClientServer({
     pushWanted();
   },
   onDataWanted: (w) => dataSource.setDataWanted(w),
+  onInstallUpdate: () => installUpdate(),
 });
 let latestGauge = null;
 dataSource.on('data', (values) => {
@@ -148,6 +151,10 @@ function statusChanged() {
   clients.broadcastStatus();
 }
 for (const src of [sim, capture, hook, injector]) src.on('status', statusChanged);
+updater.on('change', (u) => {
+  statusChanged();
+  tray.setUpdate(u.available && u.canInstall ? u.latest : null);
+});
 // The injector waits on liveForSec, which changes without an event.
 sim.on('status', () => injector.tick());
 
@@ -185,11 +192,38 @@ const tray = new Tray({
   },
 });
 tray.on('quit', shutdown);
+tray.on('update', () => installUpdate().catch((e) => log.warn(`update failed: ${e.message}`)));
 if (cfg.tray || Tray.parented) tray.start();
+updater.start();
+
+// Install the newer version: download and check it, tell the client apps to update themselves too,
+// then hand over to the installer, which restarts Cockpit Link when done (see updater.mjs).
+let installing = false;
+async function installUpdate() {
+  if (installing) return;
+  installing = true;
+  try {
+    const file = await updater.download();
+    clients.broadcast({ type: 'update' });
+    updater.installing();
+    setTimeout(() => {
+      // The tray launcher stops the host, starts the installer and exits; otherwise the host does it.
+      if (tray.parent) tray.install(file);
+      else {
+        updater.runInstaller(file);
+        shutdown();
+      }
+    }, 1500); // let the pages and clients get the news
+  } catch (e) {
+    installing = false;
+    throw e;
+  }
+}
 log.info(`ready. Debug monitor: http://localhost:${cfg.port}/`);
 
 async function shutdown() {
   log.info('shutting down');
+  updater.close();
   tray.close();
   injector.close();
   screens.close();

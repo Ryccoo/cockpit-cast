@@ -3,6 +3,7 @@
 //   Windows: one per monitor - which monitor, full screen, and what it shows (lists come from the host).
 //   Startup: start at sign-in, open the windows straight away, hide the mouse pointer.
 //   Other: device name, frame rate.
+//   Updates: this version, whether a newer one exists, install it (see updater.dart).
 // "Save and start" saves, then opens the windows (this one, plus one more app copy per extra window).
 
 import 'dart:async';
@@ -18,6 +19,7 @@ import 'displays_screen.dart';
 import 'host_connection.dart';
 import 'protocol.dart';
 import 'settings.dart';
+import 'updater.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.settings, this.openOnStart = false});
@@ -290,6 +292,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text('Max frame rate for glass displays: ${s.maxFps} fps'),
                 Slider(value: s.maxFps.toDouble(), min: 5, max: 60, divisions: 11, label: '${s.maxFps}', onChanged: (v) => setState(() => s.maxFps = v.round())),
               ]),
+              _updatesSection(section),
               if (message != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(message!, style: TextStyle(color: theme.colorScheme.error))),
               FilledButton.icon(icon: const Icon(Icons.play_arrow), label: const Text('Save and start'), onPressed: _saveAndStart),
               const SizedBox(height: 8),
@@ -307,6 +310,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _updatesSection(Widget Function(String, List<Widget>) section) {
+    return ListenableBuilder(
+      listenable: Updater.instance,
+      builder: (context, _) {
+        final u = Updater.instance;
+        final theme = Theme.of(context);
+        final status = u.busy
+            ? 'Downloading version ${u.latest}...'
+            : u.available
+                ? 'Version ${u.latest} is available.'
+                : u.checkedAt == null
+                    ? 'Not checked yet.'
+                    : 'Up to date.';
+        return section('Updates', [
+          Text('Cockpit Link $appVersion. $status'),
+          if (u.error != null) Text(u.error!, style: TextStyle(color: theme.colorScheme.error)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            if (u.available && u.canInstall)
+              FilledButton.icon(icon: const Icon(Icons.system_update), label: const Text('Update now'), onPressed: u.busy ? null : u.install),
+            if (u.available && !u.canInstall)
+              FilledButton.icon(
+                icon: const Icon(Icons.download),
+                label: const Text('Download'),
+                onPressed: () => launchUrl(Uri.parse(downloadUrl), mode: LaunchMode.externalApplication),
+              ),
+            if (u.available && u.releaseUrl != null)
+              TextButton(onPressed: () => launchUrl(Uri.parse(u.releaseUrl!), mode: LaunchMode.externalApplication), child: const Text("What's new")),
+            OutlinedButton(onPressed: u.busy ? null : u.check, child: const Text('Check now')),
+          ]),
+          if (u.canInstall)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Update automatically'),
+              subtitle: const Text('When the app starts, and when the sim PC installs an update'),
+              value: s.autoUpdate,
+              onChanged: (v) => setState(() => s.autoUpdate = v),
+            ),
+        ]);
+      },
     );
   }
 

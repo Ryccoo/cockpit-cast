@@ -10,6 +10,7 @@ import 'desktop.dart';
 import 'displays_screen.dart';
 import 'settings.dart';
 import 'settings_screen.dart';
+import 'updater.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,7 @@ Future<void> main(List<String> args) async {
     await placeWindow(settings.output, title: 'Cockpit Link · window ${settings.outputIndex + 1}');
   } else {
     await ExtraWindowsCloser.instance.install();
+    Updater.instance.start(args: args, autoInstall: settings.autoUpdate);
   }
   runApp(CockpitLinkApp(settings: settings));
 }

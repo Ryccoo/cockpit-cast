@@ -45,3 +45,13 @@ Name: "{userdesktop}\Cockpit Link Client"; Filename: "{app}\cockpit_link.exe"; T
 
 [Run]
 Filename: "{app}\cockpit_link.exe"; Description: "Start Cockpit Link Client now"; Flags: postinstall nowait skipifsilent
+; Updates from the app itself (/SILENT /UPDATE=1 /ARGS="<its command line>"; client/lib/updater.dart):
+; start it again, as it was started.
+Filename: "{app}\cockpit_link.exe"; Parameters: "{param:ARGS|}"; Flags: nowait; Check: IsUpdate
+
+[Code]
+// Started by the app's own updater.
+function IsUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') = '1';
+end;

@@ -6,7 +6,7 @@
 #   CockpitLink-Client-android.apk        Android
 #   SHA256SUMS.txt                        checksums (the updater checks downloads against them)
 # The file names have no version in them, so .../releases/latest/download/<name> always gets the latest.
-# The tag must match the version in host/package.json and client/pubspec.yaml.
+# The tag must match the version in host/package.json, client/pubspec.yaml and client/lib/about.dart.
 name: Release
 
 on:
@@ -32,9 +32,10 @@ jobs:
         run: |
           host=$(node -p "require('./host/package.json').version")
           client=$(grep '^version:' client/pubspec.yaml | sed 's/version: *//; s/+.*//')
+          app=$(sed -n "s/^const appVersion = '\(.*\)';/\1/p" client/lib/about.dart)
           tag="${GITHUB_REF_NAME#v}"
-          echo "host $host, client $client, tag $tag"
-          [ "$host" = "$client" ] || { echo "host and client versions differ"; exit 1; }
+          echo "host $host, client $client, client appVersion $app, tag $tag"
+          [ "$host" = "$client" ] && [ "$client" = "$app" ] || { echo "versions differ: host/package.json, client/pubspec.yaml, client/lib/about.dart"; exit 1; }
           if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$tag" != "$host" ]; then echo "tag v$tag does not match version $host"; exit 1; fi
           echo "version=$host" >> "$GITHUB_OUTPUT"
 

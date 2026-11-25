@@ -1,7 +1,7 @@
 // Cockpit Link tray icon (Windows): shows that the host is running.
 //
 //   click            open the layout editor in the default browser
-//   right-click      menu: layout editor, monitor, current status, quit the host
+//   right-click      menu: layout editor, monitor, current status, install an update, quit the host
 //
 // Two ways to run:
 //   started by the host (npm start): talks to the host over its own stdin/stdout, and goes away when
@@ -11,8 +11,10 @@
 //                    unexpectedly. A second launcher only opens the editor.
 // One UTF-8 line per message:
 //   host -> tray   "editor <url>", "monitor <url>", "support <url>" (donations; menu item shown when
-//                  given), "status <idle|sim|live> <text, lines split by \n>"
-//   tray -> host   "quit"
+//                  given), "status <idle|sim|live> <text, lines split by \n>",
+//                  "update <version>" (a newer version can be installed: menu item and a notification),
+//                  "install <installer path>" (stop the host, run that installer silently, exit)
+//   tray -> host   "quit", "update" (install the newer version)
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -33,7 +35,7 @@ constexpr UINT WM_HOSTGONE = WM_APP + 3;  // the host's output closed (it exited
 constexpr UINT_PTR TIMER_RESTART = 1, TIMER_KILL = 2;
 constexpr int MAX_RESTARTS = 3;
 constexpr UINT ICON_ID = 1;
-constexpr UINT CMD_EDITOR = 1, CMD_MONITOR = 2, CMD_QUIT = 3, CMD_SUPPORT = 4;
+constexpr UINT CMD_EDITOR = 1, CMD_MONITOR = 2, CMD_QUIT = 3, CMD_SUPPORT = 4, CMD_UPDATE = 5;
 
 HWND g_wnd = nullptr;
 UINT g_taskbarCreated = 0;
@@ -41,6 +43,9 @@ HICON g_icon = nullptr;
 std::wstring g_editor = L"http://localhost:8800/editor";
 std::wstring g_monitor = L"http://localhost:8800/";
 std::wstring g_support;  // donation page, from the host
+std::wstring g_update;   // newer version that can be installed, from the host
+std::wstring g_installer;  // set by "install": run it once the host has stopped
+HANDLE g_single = nullptr; // the single-instance mutex (the installer checks it)
 std::wstring g_level = L"idle";
 std::wstring g_status = L"Cockpit Link host";
 
@@ -144,14 +149,14 @@ void SendToHost(const char* line) {
   if (g_toHost) WriteFile(g_toHost, line, (DWORD)strlen(line), &n, nullptr);
 }
 
-void Notify(const wchar_t* title, const std::wstring& text) {
+void Notify(const wchar_t* title, const std::wstring& text, DWORD flags = NIIF_WARNING) {
   NOTIFYICONDATAW nid{sizeof(nid)};
   nid.hWnd = g_wnd;
   nid.uID = ICON_ID;
   nid.uFlags = NIF_INFO;
   wcsncpy_s(nid.szInfoTitle, title, _TRUNCATE);
   wcsncpy_s(nid.szInfo, text.c_str(), _TRUNCATE);
-  nid.dwInfoFlags = NIIF_WARNING;
+  nid.dwInfoFlags = flags;
   Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
@@ -162,6 +167,7 @@ void ShowMenu(int x, int y) {
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
   for (const auto& line : Lines(g_status)) AppendMenuW(m, MF_STRING | MF_GRAYED, 0, line.c_str());
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
+  if (!g_update.empty()) AppendMenuW(m, MF_STRING, CMD_UPDATE, (L"Install update " + g_update + L" and restart").c_str());
   if (!g_support.empty()) AppendMenuW(m, MF_STRING, CMD_SUPPORT, L"Support Cockpit Link \u2665 (Ko-fi)");
   AppendMenuW(m, MF_STRING, CMD_QUIT, L"Quit Cockpit Link host");
   SetMenuDefaultItem(m, CMD_EDITOR, FALSE);
@@ -171,6 +177,10 @@ void ShowMenu(int x, int y) {
   if (cmd == CMD_EDITOR) Open(g_editor);
   else if (cmd == CMD_MONITOR) Open(g_monitor);
   else if (cmd == CMD_SUPPORT) Open(g_support);
+  else if (cmd == CMD_UPDATE) {
+    SendToHost("update\n");
+    Notify(L"Cockpit Link", L"Downloading the update. Cockpit Link restarts by itself when it is installed.", NIIF_INFO);
+  }
   else if (cmd == CMD_QUIT) {
     SendToHost("quit\n");
     if (g_launcher) {
@@ -187,6 +197,16 @@ void OnLine(const std::wstring& line) {
   if (cmd == L"editor" && !rest.empty()) g_editor = rest;
   else if (cmd == L"monitor" && !rest.empty()) g_monitor = rest;
   else if (cmd == L"support" && rest.rfind(L"https://", 0) == 0) g_support = rest;
+  else if (cmd == L"update" && !rest.empty() && rest.size() < 32) {
+    if (rest != g_update) Notify(L"Cockpit Link update", L"Version " + rest + L" is available. Right-click the Cockpit Link icon to install it.", NIIF_INFO);
+    g_update = rest;
+  }
+  else if (cmd == L"install" && g_launcher && rest.size() > 4 && _wcsicmp(rest.c_str() + rest.size() - 4, L".exe") == 0) {
+    g_installer = rest;
+    g_quitting = true;
+    SendToHost("quit\n");
+    SetTimer(g_wnd, TIMER_KILL, 10000, nullptr);  // the host did not stop by itself: end it
+  }
   else if (cmd == L"status") {
     size_t sp2 = rest.find(L' ');
     std::wstring level = rest.substr(0, sp2);
@@ -207,6 +227,27 @@ void OnLine(const std::wstring& line) {
 }
 
 bool StartHost();
+
+// Update: run the installer silently. It shows its progress, closes what is still open, and starts
+// Cockpit Link again when done (/UPDATE=1; installer/host.iss). Its log goes next to the host's.
+void RunInstaller() {
+  if (g_single) {  // the installer refuses to run while this mutex exists
+    CloseHandle(g_single);
+    g_single = nullptr;
+  }
+  wchar_t logPath[MAX_PATH] = L"";
+  ExpandEnvironmentStringsW(L"%LOCALAPPDATA%\\CockpitLink\\logs\\update-install.log", logPath, MAX_PATH);
+  std::wstring cmd = L"\"" + g_installer + L"\" /SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /UPDATE=1 /LOG=\"" + logPath + L"\"";
+  STARTUPINFOW si{sizeof(si)};
+  PROCESS_INFORMATION pi{};
+  if (CreateProcessW(g_installer.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+  } else {
+    std::wstring msg = L"Cockpit Link could not start the update installer:\n" + g_installer;
+    MessageBoxW(nullptr, msg.c_str(), L"Cockpit Link", MB_ICONERROR);
+  }
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   if (msg == g_taskbarCreated && g_taskbarCreated) { // Explorer restarted: put the icon back
@@ -232,7 +273,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
       return 0;
     }
     case WM_HOSTGONE:
-      if (!g_launcher || g_quitting) {
+      if (!g_installer.empty()) {
+        RunInstaller();
+        DestroyWindow(hwnd);
+      } else if (!g_launcher || g_quitting) {
         DestroyWindow(hwnd);
       } else if (++g_restarts <= MAX_RESTARTS) {
         Notify(L"Cockpit Link", L"The host stopped unexpectedly; starting it again.");
@@ -364,9 +408,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
   // Started by the host (its pipe on our stdin), or by itself (launcher).
   HANDLE stdIn = GetStdHandle(STD_INPUT_HANDLE);
   g_launcher = !stdIn || stdIn == INVALID_HANDLE_VALUE || GetFileType(stdIn) != FILE_TYPE_PIPE;
-  HANDLE single = nullptr;
   if (g_launcher) {
-    single = CreateMutexW(nullptr, TRUE, L"Local\\CockpitLinkTray");
+    g_single = CreateMutexW(nullptr, TRUE, L"Local\\CockpitLinkTray");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {  // already running: just open the editor
       Open(g_editor);
       return 0;
@@ -418,6 +461,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
   CloseHostHandles();
   if (g_icon) DestroyIcon(g_icon);
   Gdiplus::GdiplusShutdown(gdiplus);
-  if (single) CloseHandle(single);
+  if (g_single) CloseHandle(g_single);
   return 0;
 }

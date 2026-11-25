@@ -50,6 +50,7 @@
   <h2>Instruments in this cockpit <span id="instAircraft"></span> <button id="instRefresh">Refresh</button></h2>
   <div id="inst"><p class="note">Loading…</p></div>
 </section>
+<script src="/update-banner.js"></script>
 <script>
 const tiles = document.getElementById('tiles');
 const views = new Map(); // id -> { tile, canvas, ctx, info, frames, lastSeq, aspectSet }
@@ -73,6 +74,7 @@ function connect() {
 function onText(m) {
   if (m.type === 'welcome') document.getElementById('host').textContent = `${m.host} (v${m.version})`;
   if (m.type === 'status') {
+    window.showUpdate?.(m.update, (o) => ws?.readyState === 1 && ws.send(JSON.stringify(o)));
     const s = m.sim;
     setText('sim', !s.connected ? 'not running' : s.inFlight ? (s.paused ? 'paused' : 'in flight') + (s.aircraft ? ` · ${s.aircraft}` : '') : 'menu', s.connected && s.inFlight);
     setText('cap', m.capture.connected ? m.capture.source : 'none', m.capture.connected);

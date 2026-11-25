@@ -102,6 +102,23 @@ After every MSFS update, run **Repair Community hook** from the Start menu (sim 
 contains a copy of a sim file that updates change. Uninstalling removes the program and the hook, and
 asks whether to keep your learned displays and layouts.
 
+### Updates
+
+Installed copies update themselves; there is no need to download a new installer or pull the code.
+
+- **Sim PC.** The host checks GitHub for a new release a minute after it starts and twice a day. When
+  there is one, the tray icon shows a notification and its menu has **Install update**. The editor and
+  monitor also show a banner. One click downloads the new installer, checks it against the release's
+  checksums, installs it silently and starts Cockpit Link again. Your layouts, screens and learned
+  displays are kept.
+- **Display PCs** (Windows client installed with the Setup program) update with the sim PC: the same
+  click tells them to update too. They also update when the app starts (*Settings > Updates >
+  Update automatically*, on by default), and *Update now* is there for a manual update. Linux, Android
+  and the portable zip show that a new version exists, with a download link.
+- The only thing sent is a request for the latest release from GitHub's API. To turn the host's check
+  off, set `"updates": false` in `host/config.json` (or `COCKPIT_LINK_UPDATES=0`). Copies built from
+  source show that a new release exists but do not install it.
+
 To build from source instead, follow the quick start below.
 
 ## Quick start (from source)
@@ -332,7 +349,7 @@ keys. For example:
 | `http://localhost:8800/api/status` | Full state as JSON (sim PC only) |
 | `POST /api/inject` | Inject capture.dll now (when `autoInject` is off) |
 
-- **Logs:** `%LOCALAPPDATA%\CockpitLink\logs\` (`host.log`, `capture.log`).
+- **Logs:** `%LOCALAPPDATA%\CockpitLink\logs\` (`host.log`, `capture.log`, `update-install.log`).
 - **Saved layouts and screens:** `%LOCALAPPDATA%\CockpitLink\`.
 
 ## Troubleshooting

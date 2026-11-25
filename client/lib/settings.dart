@@ -109,6 +109,7 @@ class Settings {
     this.autoStart = false,
     this.launchAtLogin = false,
     this.hideCursor = false,
+    this.autoUpdate = true,
     this.profile = '',
     required this.clientName,
     List<OutputConfig>? outputs,
@@ -127,6 +128,9 @@ class Settings {
 
   /// Hide the mouse pointer over the displays.
   bool hideCursor;
+
+  /// Install a new version when the app starts (Windows, installed copies; see updater.dart).
+  bool autoUpdate;
 
   /// Prefix for saved keys, so separate copies on one box keep separate settings.
   String profile;
@@ -187,6 +191,7 @@ class Settings {
       autoStart: p.getBool(k('autoStart')) ?? false,
       launchAtLogin: p.getBool(k('launchAtLogin')) ?? false,
       hideCursor: p.getBool(k('hideCursor')) ?? false,
+      autoUpdate: p.getBool(k('autoUpdate')) ?? true,
       profile: profile,
       clientName: p.getString(k('clientName')) ?? _defaultName(),
       outputs: outputs,
@@ -250,6 +255,7 @@ class Settings {
     await p.setBool(k('autoStart'), autoStart);
     await p.setBool(k('launchAtLogin'), launchAtLogin);
     await p.setBool(k('hideCursor'), hideCursor);
+    await p.setBool(k('autoUpdate'), autoUpdate);
     await p.setString(k('clientName'), clientName);
     await p.setString(k('outputs'), jsonEncode([for (final o in outputs) o.toJson()]));
   }

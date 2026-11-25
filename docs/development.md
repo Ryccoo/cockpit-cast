@@ -73,12 +73,26 @@ set COCKPIT_LINK_SCREEN_MODE=steam
 cd host && npm start
 ```
 
+Updates without a real release (a stand-in for GitHub's API that serves the newer installers):
+
+```
+set COCKPIT_LINK_UPDATE_URL=http://127.0.0.1:8899/latest
+"%LOCALAPPDATA%\Programs\Cockpit Link\cockpit-link.exe"          # host: checks a minute after start
+"%LOCALAPPDATA%\Programs\Cockpit Link Client\cockpit_link.exe"   # client: checks 10 s after start
+```
+
+The URL must answer like `GET /repos/<owner>/<repo>/releases/latest` (`tag_name`, `html_url`,
+`assets[].name` and `browser_download_url`), with `SHA256SUMS.txt` among the assets. The installers must
+be built with a higher version (host/package.json, client/pubspec.yaml and client/lib/about.dart).
+
 ## Keeping things in sync
 
 - `host/public/gauges.js` (editor) is a port of `client/lib/gauges/instruments.dart` (client). Change both.
 - `config/displays.json` (built-in displays) feeds both the hook build and the host. Learned displays
   need no rebuild: the host sends the hook its table at runtime.
 - The hook is the stock `BaseInstrument.js` with our code appended: rebuild it after every sim update.
+- The version is in three places: `host/package.json`, `client/pubspec.yaml` and `client/lib/about.dart`
+  (`appVersion`, which the client's updater compares). The release workflow refuses a tag that differs.
 
 ## Logs and state
 
@@ -86,6 +100,7 @@ cd host && npm start
 |---|---|
 | Host log | `%LOCALAPPDATA%\CockpitLink\logs\host.log` (previous run: `host.1.log`) |
 | capture.dll log | `%LOCALAPPDATA%\CockpitLink\logs\capture.log` |
+| Update installs | `%LOCALAPPDATA%\CockpitLink\logs\update-install.log` (host), `%LOCALAPPDATA%\CockpitLink\client-update.log` (client) |
 | Full host state | `http://localhost:8800/api/status` |
 | Learned displays | `http://localhost:8800/api/displays`, `%LOCALAPPDATA%\CockpitLink\displays.json` |
 | Saved display pictures (editor Insert window) | `%LOCALAPPDATA%\CockpitLink\thumbs\<id>.jpg`, `http://localhost:8800/thumb/<id>.jpg` |

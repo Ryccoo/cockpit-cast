@@ -47,6 +47,12 @@ const DEFAULTS = {
   maxDataHz: 60,
   // Use synthetic flight data instead of SimConnect (testing gauges without the sim).
   fakeData: false,
+  // Check GitHub for new releases (installing always needs a click). See updater.mjs.
+  updates: true,
+  updateRepo: 'Ryccoo/cockpit-link',
+  // Where the latest release is described (GitHub API format); null = the GitHub repo above.
+  updateUrl: null,
+  root: ROOT,
   dataDir: DATA_DIR,
   logFile: path.join(DATA_DIR, 'logs', 'host.log'),
 };
@@ -61,6 +67,8 @@ const ENV = {
   COCKPIT_LINK_SCREEN_MODE: ['screenMode', String],
   COCKPIT_LINK_FAKE_DATA: ['fakeData', (v) => v === '1' || v === 'true'],
   COCKPIT_LINK_TRAY: ['tray', (v) => v !== '0' && v !== 'false'],
+  COCKPIT_LINK_UPDATES: ['updates', (v) => v !== '0' && v !== 'false'],
+  COCKPIT_LINK_UPDATE_URL: ['updateUrl', String],
 };
 
 export function loadConfig() {

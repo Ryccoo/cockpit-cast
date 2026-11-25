@@ -197,6 +197,7 @@
 </div>
 
 <script src="/gauges.js"></script>
+<script src="/update-banner.js"></script>
 <script>
 'use strict';
 // ---- gauge catalogue ----
@@ -488,7 +489,7 @@ function connect() {
       if ($('insert').classList.contains('open')) { renderInsert(); updateSubs(); }
       if (scAircraft && !$('screens').contains(document.activeElement)) renderScreens(); // its display list
     }
-    else if (m.type === 'status') { const sp = m.sim?.speeds; refs = sp ? Object.fromEntries(Object.entries({ vfe: sp.vfe, vno: sp.vno }).filter(([, v]) => v)) : {}; }
+    else if (m.type === 'status') { window.showUpdate?.(m.update, send); const sp = m.sim?.speeds; refs = sp ? Object.fromEntries(Object.entries({ vfe: sp.vfe, vno: sp.vno }).filter(([, v]) => v)) : {}; }
     else if (m.type === 'dataVars') { varInfo = m.info || m.vars.map((k) => ({ key: k, name: k, unit: '' })); varIndex = Object.fromEntries(m.vars.map((k, i) => [k, i])); renderProps(); }
     else if (m.type === 'data') { latest = m.v; latestAt = performance.now(); }
     else if (m.type === 'error') showErr(m.message);
