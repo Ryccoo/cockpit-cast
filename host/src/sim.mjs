@@ -18,11 +18,15 @@ const REQ_AIRCRAFT = 11;
 const RETRY_MS = 5000;
 const DEF_GAUGES = 20;
 const REQ_GAUGES = 20;
+const DEF_TITLE = 21;
+const REQ_TITLE = 21;
 
 export class SimMonitor extends EventEmitter {
   constructor() {
     super();
-    this.state = { connected: false, inFlight: false, paused: false, aircraft: null, liveSince: null };
+    // aircraft: the aircraft's folder name (the key for per-aircraft settings); title: its name in the
+    // sim (TITLE, e.g. "Cessna Skyhawk G1000 Asobo"), read once per aircraft, null until known.
+    this.state = { connected: false, inFlight: false, paused: false, aircraft: null, title: null, liveSince: null };
     this.handle = null;
     this.stopped = false;
     this.lastError = null;
@@ -47,7 +51,7 @@ export class SimMonitor extends EventEmitter {
 
       handle.on('event', (e) => this.onEvent(e));
       handle.on('eventFilename', (e) => {
-        if (e.clientEventId === EV_AIRCRAFT) this.set({ aircraft: shortAircraft(e.fileName) });
+        if (e.clientEventId === EV_AIRCRAFT) this.setAircraft(shortAircraft(e.fileName));
       });
       handle.on('systemState', (s) => this.onSystemState(s));
       handle.on('exception', (ex) => {
@@ -55,6 +59,11 @@ export class SimMonitor extends EventEmitter {
         log.warn(`SimConnect exception ${ex.exception} (send ${ex.sendId})${v ? ` for ${v.name} [${v.unit}]` : ''}`);
       });
       handle.on('simObjectData', (d) => {
+        if (d.requestID === REQ_TITLE) {
+          const title = d.data.readString256().trim();
+          if (title && title !== this.state.title) this.set({ title });
+          return;
+        }
         if (d.requestID !== REQ_GAUGES) return;
         const values = new Array(SIMVARS.length);
         for (let i = 0; i < SIMVARS.length; i++) values[i] = d.data.readFloat64();
@@ -72,6 +81,7 @@ export class SimMonitor extends EventEmitter {
       handle.requestSystemState(REQ_AIRCRAFT, 'AircraftLoaded');
 
       this.defSendIds.clear();
+      handle.addToDataDefinition(DEF_TITLE, 'TITLE', null, SimConnectDataType.STRING256);
       for (const v of SIMVARS) {
         const id = handle.addToDataDefinition(DEF_GAUGES, v.name, v.unit, SimConnectDataType.FLOAT64);
         this.defSendIds.set(id, v);
@@ -108,14 +118,27 @@ export class SimMonitor extends EventEmitter {
 
   onSystemState(s) {
     if (s.requestID === REQ_SIM) this.setInFlight(s.dataInteger === 1);
-    else if (s.requestID === REQ_AIRCRAFT && s.dataString) this.set({ aircraft: shortAircraft(s.dataString) });
+    else if (s.requestID === REQ_AIRCRAFT && s.dataString) this.setAircraft(shortAircraft(s.dataString));
+  }
+
+  setAircraft(aircraft) {
+    if (aircraft !== this.state.aircraft) this.set({ aircraft, title: null });
+    this.requestTitle();
+  }
+
+  // The user aircraft's TITLE, once (again when a flight starts: right after loading it may not exist yet).
+  requestTitle() {
+    this.handle?.requestDataOnSimObject(REQ_TITLE, DEF_TITLE, SimConnectConstants.OBJECT_ID_USER, SimConnectPeriod.ONCE);
   }
 
   setInFlight(inFlight) {
     if (inFlight === this.state.inFlight) return;
     log.info(inFlight ? 'flight running' : 'flight stopped (menu or loading)');
     this.set({ inFlight });
-    if (inFlight) this.handle?.requestSystemState(REQ_AIRCRAFT, 'AircraftLoaded');
+    if (inFlight) {
+      this.handle?.requestSystemState(REQ_AIRCRAFT, 'AircraftLoaded');
+      this.requestTitle();
+    }
     this.updateLive();
   }
 
@@ -148,12 +171,13 @@ export class SimMonitor extends EventEmitter {
   }
 
   status() {
-    const { connected, inFlight, paused, aircraft, liveSince } = this.state;
+    const { connected, inFlight, paused, aircraft, title, liveSince } = this.state;
     return {
       connected,
       inFlight,
       paused,
       aircraft,
+      title,
       liveForSec: liveSince ? Math.floor((Date.now() - liveSince) / 1000) : 0,
       // Speeds the sim does not provide, from the aircraft profile (null: client estimates).
       speeds: aircraftProfile(aircraft),

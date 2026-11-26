@@ -53,6 +53,15 @@ export class Screens extends EventEmitter {
     } catch (e) {
       log.warn(`cannot read ${this.file}: ${e.message}`);
     }
+    // Readable aircraft names for the editor (folder name -> the sim's TITLE), remembered so aircraft
+    // that are not loaded show them too.
+    this.namesFile = path.join(cfg.dataDir, 'aircraft-names.json');
+    this.names = {};
+    try {
+      if (fs.existsSync(this.namesFile)) this.names = JSON.parse(fs.readFileSync(this.namesFile, 'utf8')) || {};
+    } catch (e) {
+      log.warn(`cannot read ${this.namesFile}: ${e.message}`);
+    }
     this.sim = sim;
     this.hook = hook;
     this.registry = registry;
@@ -99,8 +108,18 @@ export class Screens extends EventEmitter {
       log.info(`mode: ${this.mode} -> ${mode}${this.sim.status().aircraft ? ` (${this.sim.status().aircraft})` : ''}`);
       this.mode = mode;
     }
+    const { aircraft, title } = this.sim.status();
+    if (aircraft && title && this.names[aircraft] !== title) {
+      this.names[aircraft] = title;
+      try {
+        fs.mkdirSync(path.dirname(this.namesFile), { recursive: true });
+        fs.writeFileSync(this.namesFile, JSON.stringify(this.names, null, 2));
+      } catch (e) {
+        log.warn(`cannot write ${this.namesFile}: ${e.message}`);
+      }
+    }
     const list = this.list();
-    const json = JSON.stringify([list, this.sim.status().aircraft ?? null]);
+    const json = JSON.stringify([list, aircraft ?? null, title ?? null]);
     if (json === this.last) return;
     this.last = json;
     this.emit('change', list);
@@ -128,14 +147,15 @@ export class Screens extends EventEmitter {
   }
 
   /// Extra fields for the 'screens' message (the editor uses them; clients only read 'screens'):
-  /// the loaded aircraft, the per-aircraft choices, and every aircraft the host knows of.
+  /// the loaded aircraft, the per-aircraft choices, every aircraft the host knows of, and readable names
+  /// (aircraftNames: folder name -> the sim's title) for those it has seen loaded.
   extra() {
     const aircraft = this.sim.status().aircraft ?? null;
     const known = new Set(Object.keys(this.perAircraft));
     for (const name of Object.keys(this.instruments?.byAircraft ?? {})) known.add(name);
     for (const d of this.registry.all()) for (const name of d.aircraft ?? []) known.add(name);
     if (aircraft) known.add(aircraft);
-    return { aircraft, perAircraft: this.perAircraft, knownAircraft: [...known].sort() };
+    return { aircraft, perAircraft: this.perAircraft, knownAircraft: [...known].sort(), aircraftNames: this.names };
   }
 
   /// Replace the screen list (from the editor): any number of screens, each with an id (what a client

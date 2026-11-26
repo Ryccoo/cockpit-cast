@@ -3,21 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CockpitCast Layout Editor</title>
+<title>CockpitCast Editor</title>
 <style>
   :root {
     --bg: #0f1012; --panel: #17181b; --panel2: #1e2024; --line: #2c2f35; --text: #e6e6e6; --muted: #9aa0a8;
     --accent: #3ba55c; --accent2: #2d8a4a; --warn: #e0a31b; --danger: #d9443a; --sel: #f0b429;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; }
   header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
   header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-  header .status { color: var(--muted); font-size: 13px; }
+  header .status { color: var(--muted); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   header .status.ok::before { content: "● "; color: var(--accent); }
   header .status.bad::before { content: "● "; color: var(--danger); }
   header a { color: var(--muted); margin-left: auto; }
-  main { display: grid; grid-template-columns: 260px 1fr 320px; height: calc(100% - 49px); }
+  header .tabs { display: flex; gap: 4px; }
+  header .tabs button { background: transparent; border-color: transparent; color: var(--muted); padding: 4px 12px; }
+  header .tabs button.on { background: var(--panel2); border-color: var(--line); color: var(--text); }
+  main { display: grid; grid-template-columns: 260px 1fr 320px; flex: 1; min-height: 0; }
+  body[data-tab=screens] main { display: none; }
+  /* screens tab: rows are screens, columns all aircraft + one per aircraft with its own choices */
+  #screensPage { display: none; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
+  #screensPage .body, #screensPage .toolbar { min-width: 0; }
+  body[data-tab=screens] #screensPage { display: flex; }
+  #screensPage .body { overflow: auto; padding: 12px 16px 24px; }
+  #screensPage .toolbar select { max-width: 260px; }
+  .scwrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; max-width: 100%; }
+  .sctable { border-collapse: separate; border-spacing: 0; }
+  .sctable th, .sctable td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 10px; vertical-align: top; text-align: left; min-width: 230px; max-width: 300px; }
+  .sctable tr > :last-child { border-right: 0; }
+  .sctable tbody tr:last-child td { border-bottom: 0; }
+  .sctable th { background: var(--panel); font-weight: 600; }
+  .sctable .sc { position: sticky; left: 0; background: var(--panel); z-index: 1; min-width: 210px; }
+  .sctable td.custom { box-shadow: inset 3px 0 0 var(--accent); }
+  .sctable label.f { grid-template-columns: 48px 1fr; }
+  .sctable .an { overflow-wrap: anywhere; }
+  .sctable .row { margin-top: 6px; }
+  .sctable .nowrap { flex-wrap: nowrap; margin-top: 0; }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 4px; font-weight: 400; overflow-wrap: anywhere; }
+  .sub .on { color: var(--accent); }
   aside { background: var(--panel); border-right: 1px solid var(--line); overflow: auto; padding: 12px; }
   aside.right { border-right: 0; border-left: 1px solid var(--line); }
   h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
@@ -63,12 +89,6 @@
   .arc { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 4px; margin: 4px 0; }
   .live { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; }
   .err { color: #ffb4ae; font-size: 13px; min-height: 18px; }
-  .screen { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 8px; }
-  .screen .head { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
-  .screen .head small { color: var(--muted); white-space: nowrap; }
-  .screen .head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-  .screen.custom { border-color: var(--accent); }
-  .screen .def { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .badge { font-size: 11px; color: #111; background: var(--accent); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
   .empty { color: var(--muted); padding: 40px; text-align: center; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
@@ -112,12 +132,13 @@
   #insert details.grp.now { border-color: var(--accent); }
   .insertbtn { width: 100%; padding: 10px; font-weight: 600; }
   #cropCv { width: 100%; display: block; background: #000; border-radius: 4px; cursor: crosshair; touch-action: none; margin: 6px 0; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } aside { border: 0; } .stagewrap { height: 60vh; } }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; flex: none; } aside { border: 0; } .stagewrap { height: 60vh; } header { flex-wrap: wrap; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>CockpitCast · Layout editor</h1>
+  <h1>CockpitCast</h1>
+  <nav class="tabs"><button data-tab="layouts">Layouts</button><button data-tab="screens">Screens</button></nav>
   <span id="conn" class="status bad">connecting</span>
   <a href="/">Monitor</a>
   <a href="https://ko-fi.com/richardludvigh" target="_blank" rel="noopener" title="CockpitCast is free and open source. Support it on Ko-fi." style="margin-left:0;color:#e06c75">&#9829; Support</a>
@@ -133,12 +154,7 @@
     </div>
     <div class="row"><button id="btnReset" class="danger">Reset all to defaults</button></div>
 
-    <h2>Screens</h2>
-    <label class="f" title="Choose an aircraft to give it its own layouts or displays. Screens left on Default follow the settings for all aircraft.">For <select id="scAircraft"></select></label>
-    <div class="hint" id="screensHint"></div>
-    <div id="screens"></div>
-    <div class="row"><button id="btnAddScreen">Add screen</button><button id="btnScreens" class="primary" disabled>Save screens</button></div>
-    <div id="screensMsg" class="hint"></div>
+    <div class="hint" style="margin-top:14px">Which screen shows which layout: the <a href="#screens" data-tab="screens" style="color:inherit">Screens</a> tab.</div>
   </aside>
 
   <section class="center">
@@ -163,6 +179,24 @@
     <div id="props"></div>
   </aside>
 </main>
+
+<section id="screensPage">
+  <div class="toolbar">
+    <button id="btnScreens" class="primary" disabled>Save</button>
+    <button id="btnScreensRevert" disabled>Revert</button>
+    <span id="screensDirty" class="dirty"></span>
+    <span id="screensMsg" class="hint"></span>
+    <span class="grow"></span>
+    <button id="btnAddScreen">Add screen</button>
+    <select id="addAircraft" title="Give another aircraft its own choices"></select>
+  </div>
+  <div class="body">
+    <div class="hint" style="max-width:920px;margin-top:0">Each row is a physical screen: a display app shows it when started with <code>--screen &lt;id&gt;</code> (or with the screen chosen in its Settings).
+      <b>All aircraft:</b> glass cockpits show the chosen glass display (<i>Automatic</i>: the cockpit's own displays in order, PFD first); other aircraft show the layout.
+      <b>An aircraft column</b> overrides that while the aircraft is loaded. The loaded aircraft always has a column.</div>
+    <div class="scwrap"><table class="sctable" id="scTable"></table></div>
+  </div>
+</section>
 
 <div id="preview">
   <div class="bar">
@@ -462,15 +496,17 @@ function connect() {
     send({ type: 'hello', client: 'Layout editor', protocol: 1 });
     send({ type: 'subscribeData', maxHz: 30 });
     if (!document.hidden) send({ type: 'subscribeCatalog' });
+    appsSub = false;
+    updateAppsSub();
   };
-  ws.onclose = () => { connected = false; setConn(); setTimeout(connect, 2000); };
+  ws.onclose = () => { connected = false; appsSub = false; setConn(); setTimeout(connect, 2000); };
   ws.onmessage = (ev) => {
     if (typeof ev.data !== 'string') return void onFrame(ev.data);
     const m = JSON.parse(ev.data);
     if (m.type === 'layouts') onLayouts(m.layouts);
     else if (m.type === 'screens') {
       screens = m.screens;
-      if ('perAircraft' in m) { perAircraft = m.perAircraft || {}; knownAircraft = m.knownAircraft || []; loadedAircraft = m.aircraft || null; }
+      if ('perAircraft' in m) { perAircraft = m.perAircraft || {}; knownAircraft = m.knownAircraft || []; loadedAircraft = m.aircraft || null; aircraftNames = m.aircraftNames || {}; }
       if (!screensDirty) { screensDraft = null; aircraftDraft = null; }
       renderScreens();
       renderLayouts();
@@ -487,11 +523,12 @@ function connect() {
       catalog = m;
       for (const [id, d] of Object.entries(m.displays)) if (!displayNames[id]) displayNames[id] = d.name;
       if ($('insert').classList.contains('open')) { renderInsert(); updateSubs(); }
-      if (scAircraft && !$('screens').contains(document.activeElement)) renderScreens(); // its display list
+      if (document.body.dataset.tab === 'screens') renderScreens(); // the aircraft's display lists
     }
     else if (m.type === 'status') { window.showUpdate?.(m.update, send); const sp = m.sim?.speeds; refs = sp ? Object.fromEntries(Object.entries({ vfe: sp.vfe, vno: sp.vno }).filter(([, v]) => v)) : {}; }
     else if (m.type === 'dataVars') { varInfo = m.info || m.vars.map((k) => ({ key: k, name: k, unit: '' })); varIndex = Object.fromEntries(m.vars.map((k, i) => [k, i])); renderProps(); }
     else if (m.type === 'data') { latest = m.v; latestAt = performance.now(); }
+    else if (m.type === 'apps') { apps = m.list || []; if (document.body.dataset.tab === 'screens') updateScreenStatus(); }
     else if (m.type === 'error') showErr(m.message);
     else if (m.type === 'layoutSaved') showErr('');
   };
@@ -585,111 +622,157 @@ function armButton(btn, armedText, action) {
   };
 }
 
-// ---- screens (any number) ----
-// "For" picks what is being edited: the settings for all aircraft, or one aircraft's own choices
-// (a screen can show one layout or one glass display whenever that aircraft is loaded).
+// ---- screens tab ----
+// Rows: the physical screens (a display app runs as --screen <id>). Columns: the rules for all aircraft
+// (glass display for glass cockpits, layout otherwise), then one per aircraft with its own choices: a
+// screen can show one layout or one glass display whenever that aircraft is loaded.
 let screensDraft = null, screensDirty = false;
-let perAircraft = {}, aircraftDraft = null, knownAircraft = [], loadedAircraft = null;
-let scAircraft = '';         // '' = all aircraft
-function renderScreens() {
+let perAircraft = {}, aircraftDraft = null, knownAircraft = [], loadedAircraft = null, aircraftNames = {};
+let extraCols = [];          // aircraft columns added on this page that have no choices yet
+let previewAircraft = '';    // whose choices the preview shows ('' = all aircraft)
+let apps = null;             // connected display apps (host 'apps' message, while this tab is shown)
+const acName = (a) => aircraftNames[a] || a;
+const dname = (id) => displayNames[id] || catalog?.displays?.[id]?.name || String(id).toUpperCase();
+const lname = (id) => layouts.find((l) => l.id === id)?.name ?? id;
+
+function screenColumns() {
+  const cols = loadedAircraft ? [loadedAircraft] : [];
+  const own = Object.keys(aircraftDraft || {}).sort((x, y) => acName(x).localeCompare(acName(y)));
+  for (const a of [...own, ...extraCols]) if (!cols.includes(a)) cols.push(a);
+  return cols;
+}
+// "showing PFD · on Cockpit Pi left": what the screen shows now (host) and which display apps show it
+// (their 'shows' text starts with "screen <id>").
+function statusText(id) {
+  const live = screens.find((s) => s.id === id);
+  let t = !live ? 'new, not saved yet'
+    : live.show?.kind === 'display' ? `showing <span class="on">${esc(dname(live.show.id))}</span>`
+    : live.show?.kind === 'layout' ? `showing <span class="on">${esc(lname(live.show.id))}</span>`
+    : 'waiting for a flight';
+  if (apps) {
+    const on = apps.filter((x) => { const sh = x.shows || ''; return sh === `screen ${id}` || sh.startsWith(`screen ${id}:`); });
+    t += on.length ? ` · on ${on.map((x) => esc(x.name + (x.window && x.window !== 'Window 1' ? ` (${x.window})` : ''))).join(', ')}` : ' · no display app';
+  }
+  return t;
+}
+function updateScreenStatus() {
+  for (const el of $('scTable').querySelectorAll('[data-status]')) el.innerHTML = statusText(el.dataset.status);
+}
+function defaultText(d) {
+  return `${d.glass ? `${dname(d.glass)} if the cockpit has it, else ` : 'Glass cockpits: their own displays; else '}${d.steam ? lname(d.steam) : 'nothing'}`;
+}
+
+// force: redraw even while a field in the table has the focus (our own handlers). Updates from the host
+// then only refresh the status lines, so typing a name or an open list is not interrupted.
+function renderScreens(force) {
   if (!screensDraft) screensDraft = screens.map((s) => ({ id: s.id, name: s.name, glass: s.glass, steam: s.steam }));
   if (!aircraftDraft) aircraftDraft = clone(perAircraft);
-  renderAircraftPicker();
-  $('btnAddScreen').style.display = scAircraft ? 'none' : '';
-  $('screensHint').innerHTML = scAircraft
-    ? `Whenever <b>${esc(scAircraft)}</b> is loaded, each screen shows what is chosen here. Screens left on <i>Default</i> follow the settings for all aircraft.`
-    : "One entry per physical screen. Start a client with <code>--screen &lt;id&gt;</code>. Glass cockpits show the chosen glass display; if the cockpit lacks it (or it is automatic), the cockpit's primary displays fill the screens in order (PFD, MFD, ...). Steam-gauge aircraft show the layout. To set up one aircraft differently, choose it under <i>For</i>.";
-  if (!screensDraft.length) { $('screens').innerHTML = '<div class="hint">No screens yet.</div>'; return; }
-  if (scAircraft) return renderAircraftScreens();
-  $('screens').innerHTML = screensDraft.map((d, i) => {
-    const live = screens.find((s) => s.id === d.id);
-    const glassOpts = ['', ...new Set([...displayIds, d.glass].filter(Boolean))].map((g) => `<option value="${esc(g)}" ${g === (d.glass ?? '') ? 'selected' : ''}>${g ? esc(displayNames[g] ?? g.toUpperCase()) : '(automatic)'}</option>`).join('');
-    const steamOpts = ['', ...layouts.map((l) => l.id)].map((id) => `<option value="${esc(id)}" ${id === (d.steam ?? '') ? 'selected' : ''}>${id ? esc(layouts.find((l) => l.id === id)?.name ?? id) : '(none)'}</option>`).join('');
-    return `<div class="screen"><div class="head"><input data-i="${i}" data-k="name" value="${esc(d.name)}" title="Screen name">
-        <small>id ${esc(d.id)}${live ? ' · ' + esc(live.mode) : ' · new'}</small>
-        <button class="icon danger" data-del="${i}" title="Remove this screen" ${screensDraft.length <= 1 ? 'disabled' : ''}>×</button></div>
-      <label class="f">Glass <select data-i="${i}" data-k="glass">${glassOpts}</select></label>
-      <label class="f">Steam <select data-i="${i}" data-k="steam">${steamOpts}</select></label></div>`;
-  }).join('');
-  for (const el of $('screens').querySelectorAll('[data-k]')) {
-    const handler = () => { screensDraft[el.dataset.i][el.dataset.k] = el.value || (el.dataset.k === 'name' ? '' : null); screensChanged(); };
-    el.oninput = el.dataset.k === 'name' ? handler : null;
-    el.onchange = handler;
-  }
-  for (const b of $('screens').querySelectorAll('[data-del]')) b.onclick = () => { screensDraft.splice(+b.dataset.del, 1); screensChanged(); renderScreens(); };
-}
-// The "For" list: all aircraft, then the loaded one, then those with their own choices, then the rest.
-function renderAircraftPicker() {
-  const sel = $('scAircraft');
-  const names = [...new Set([...knownAircraft, ...Object.keys(aircraftDraft || {}), scAircraft].filter(Boolean))].sort();
-  const label = (a) => {
-    const n = Object.keys(aircraftDraft?.[a] || {}).length;
-    return `${a}${a === loadedAircraft ? ' (loaded now)' : ''}${n ? ` · ${n} screen${n === 1 ? '' : 's'} set` : ''}`;
-  };
-  const opt = (a) => `<option value="${esc(a)}" ${a === scAircraft ? 'selected' : ''}>${esc(label(a))}</option>`;
-  const own = names.filter((a) => a !== loadedAircraft && aircraftDraft?.[a]);
-  const rest = names.filter((a) => a !== loadedAircraft && !aircraftDraft?.[a]);
-  sel.innerHTML = `<option value="" ${scAircraft ? '' : 'selected'}>All aircraft (default)</option>`
-    + (loadedAircraft ? `<optgroup label="Loaded now">${opt(loadedAircraft)}</optgroup>` : '')
-    + (own.length ? `<optgroup label="Set up">${own.map(opt).join('')}</optgroup>` : '')
-    + (rest.length ? `<optgroup label="${loadedAircraft || own.length ? 'Other aircraft flown' : 'Aircraft flown'}">${rest.map(opt).join('')}</optgroup>` : '');
-}
-$('scAircraft').onchange = () => { scAircraft = $('scAircraft').value; renderScreens(); refreshPreview(); updateSubs(); };
-
-// One aircraft: per screen, Default or one layout or one glass display (that aircraft's first).
-function renderAircraftScreens() {
-  const mine = aircraftDraft[scAircraft] || {};
-  const inAircraft = catalog?.aircraftList?.find((a) => a.name === scAircraft)?.displays ?? (scAircraft === loadedAircraft ? catalog?.present ?? [] : []);
+  renderScreensToolbar();
+  if (document.body.dataset.tab !== 'screens') return;
+  const focus = document.activeElement;
+  if (!force && focus && $('scTable').contains(focus) && ['INPUT', 'SELECT'].includes(focus.tagName)) return updateScreenStatus();
+  const cols = screenColumns();
   const allDisplays = [...new Set([...displayIds, ...Object.keys(catalog?.displays ?? {})])];
-  const dname = (id) => displayNames[id] || catalog?.displays?.[id]?.name || id.toUpperCase();
-  const lname = (id) => layouts.find((l) => l.id === id)?.name ?? id;
-  $('screens').innerHTML = screensDraft.map((d) => {
-    const cur = mine[d.id] ? `${mine[d.id].kind}:${mine[d.id].id}` : '';
-    const o = (v, text) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(text)}</option>`;
-    const others = allDisplays.filter((id) => !inAircraft.includes(id));
-    // Keep a choice visible even if its layout or display is gone.
-    const missing = cur && !layouts.some((l) => `layout:${l.id}` === cur) && !allDisplays.some((id) => `display:${id}` === cur) ? o(cur, `${mine[d.id].id} (missing)`) : '';
-    const opts = o('', 'Default')
-      + `<optgroup label="Layouts">${layouts.map((l) => o(`layout:${l.id}`, l.name)).join('')}</optgroup>`
-      + (inAircraft.length ? `<optgroup label="Glass displays in this aircraft">${inAircraft.map((id) => o(`display:${id}`, dname(id))).join('')}</optgroup>` : '')
-      + (others.length ? `<optgroup label="${inAircraft.length ? 'Other glass displays' : 'Glass displays'}">${others.map((id) => o(`display:${id}`, dname(id))).join('')}</optgroup>` : '')
-      + missing;
-    const def = `Default: ${d.glass ? `${dname(d.glass)} if the cockpit has it, else ` : 'glass displays of a glass cockpit, else '}${d.steam ? `layout ${lname(d.steam)}` : 'nothing'}`;
-    return `<div class="screen ${cur ? 'custom' : ''}"><div class="head"><b title="Screen id ${esc(d.id)}">${esc(d.name || 'Screen ' + d.id)}</b>${cur ? '<span class="badge">this aircraft</span>' : ''}<small>id ${esc(d.id)}</small></div>
-      <label class="f">Shows <select data-sid="${esc(d.id)}">${opts}</select></label>
-      ${cur ? '' : `<div class="def">${esc(def)}</div>`}</div>`;
-  }).join('');
-  for (const el of $('screens').querySelectorAll('[data-sid]')) el.onchange = () => {
-    const m = { ...(aircraftDraft[scAircraft] || {}) };
+  const opt = (v, text, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(text)}</option>`;
+
+  let h = `<thead><tr><th class="sc">Screen</th><th>All aircraft<div class="sub">the normal rules</div><div class="row"><button class="icon" data-prev="">Preview</button></div></th>`;
+  for (const a of cols) {
+    const n = Object.keys(aircraftDraft[a] || {}).length;
+    h += `<th title="${esc(a)}"><span class="an">${esc(acName(a))}</span> ${a === loadedAircraft ? '<span class="badge">loaded now</span>' : ''}
+      <div class="sub">${esc(acName(a) !== a ? a : 'its full name shows once it is loaded')}</div>
+      <div class="row"><button class="icon" data-prev="${esc(a)}">Preview</button>${n ? `<button class="icon danger" data-clear="${esc(a)}" title="Remove this aircraft's own choices">Reset</button>` : ''}</div></th>`;
+  }
+  h += '</tr></thead><tbody>';
+  screensDraft.forEach((d, i) => {
+    const glassOpts = ['', ...new Set([...allDisplays, d.glass].filter(Boolean))].map((g) => opt(g, g ? dname(g) : 'Automatic', d.glass ?? '')).join('');
+    const steamOpts = ['', ...layouts.map((l) => l.id)].map((id) => opt(id, id ? lname(id) : '(nothing)', d.steam ?? '')).join('');
+    h += `<tr><td class="sc"><div class="row nowrap"><input data-i="${i}" data-k="name" value="${esc(d.name)}" title="Screen name">
+        <button class="icon danger" data-del="${i}" title="Remove this screen" ${screensDraft.length <= 1 ? 'disabled' : ''}>×</button></div>
+        <div class="sub">id <b>${esc(d.id)}</b> · <span data-status="${esc(d.id)}">${statusText(d.id)}</span></div></td>
+      <td><label class="f" title="For glass cockpits">Glass <select data-i="${i}" data-k="glass">${glassOpts}</select></label>
+        <label class="f" title="For aircraft without glass displays">Layout <select data-i="${i}" data-k="steam">${steamOpts}</select></label></td>`;
+    for (const a of cols) {
+      const mine = aircraftDraft[a]?.[d.id];
+      const cur = mine ? `${mine.kind}:${mine.id}` : '';
+      const inA = catalog?.aircraftList?.find((x) => x.name === a)?.displays ?? (a === loadedAircraft ? catalog?.present ?? [] : []);
+      const others = allDisplays.filter((id) => !inA.includes(id));
+      // Keep a choice visible even if its layout or display is gone.
+      const missing = cur && !layouts.some((l) => `layout:${l.id}` === cur) && !allDisplays.some((id) => `display:${id}` === cur) ? opt(cur, `${mine.id} (missing)`, cur) : '';
+      const opts = opt('', 'Same as all aircraft', cur)
+        + `<optgroup label="Layouts">${layouts.map((l) => opt(`layout:${l.id}`, l.name, cur)).join('')}</optgroup>`
+        + (inA.length ? `<optgroup label="Glass displays in this aircraft">${inA.map((id) => opt(`display:${id}`, dname(id), cur)).join('')}</optgroup>` : '')
+        + (others.length ? `<optgroup label="${inA.length ? 'Other glass displays' : 'Glass displays'}">${others.map((id) => opt(`display:${id}`, dname(id), cur)).join('')}</optgroup>` : '')
+        + missing;
+      h += `<td class="${cur ? 'custom' : ''}"><select data-ac="${esc(a)}" data-sid="${esc(d.id)}">${opts}</select>${cur ? '' : `<div class="sub">${esc(defaultText(d))}</div>`}</td>`;
+    }
+    h += '</tr>';
+  });
+  $('scTable').innerHTML = h + '</tbody>';
+
+  for (const el of $('scTable').querySelectorAll('[data-k]')) {
+    const set = () => { screensDraft[el.dataset.i][el.dataset.k] = el.value || (el.dataset.k === 'name' ? '' : null); screensChanged(); };
+    if (el.dataset.k === 'name') el.oninput = set;
+    else el.onchange = () => { set(); renderScreens(true); };
+  }
+  for (const el of $('scTable').querySelectorAll('[data-ac]')) el.onchange = () => {
+    const a = el.dataset.ac, m = { ...(aircraftDraft[a] || {}) };
     const [kind, ...rest] = el.value.split(':');
     if (el.value) m[el.dataset.sid] = { kind, id: rest.join(':') };
     else delete m[el.dataset.sid];
-    if (Object.keys(m).length) aircraftDraft[scAircraft] = m;
-    else delete aircraftDraft[scAircraft];
+    if (Object.keys(m).length) aircraftDraft[a] = m;
+    else { delete aircraftDraft[a]; if (!extraCols.includes(a)) extraCols.push(a); } // keep its column for now
     screensChanged();
-    renderScreens();
+    renderScreens(true);
+  };
+  for (const b of $('scTable').querySelectorAll('[data-del]')) b.onclick = () => { screensDraft.splice(+b.dataset.del, 1); screensChanged(); renderScreens(true); };
+  for (const b of $('scTable').querySelectorAll('[data-prev]')) b.onclick = () => { previewAircraft = b.dataset.prev; $('preview').classList.add('open'); renderPreview(); updateSubs(); };
+  for (const b of $('scTable').querySelectorAll('[data-clear]')) b.onclick = () => {
+    if (!b.classList.contains('armed')) {
+      b.classList.add('armed');
+      b.textContent = 'Sure?';
+      setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Reset'; }, 3000);
+      return;
+    }
+    delete aircraftDraft[b.dataset.clear];
+    if (!extraCols.includes(b.dataset.clear)) extraCols.push(b.dataset.clear);
+    screensChanged();
+    renderScreens(true);
   };
 }
+// Toolbar: save state, and the aircraft that can get a column.
+function renderScreensToolbar() {
+  $('btnScreens').disabled = !screensDirty;
+  $('btnScreensRevert').disabled = !screensDirty;
+  $('screensDirty').textContent = screensDirty ? 'Unsaved changes' : '';
+  document.querySelector('.tabs [data-tab=screens]').textContent = screensDirty ? 'Screens *' : 'Screens';
+  const cols = new Set(screenColumns());
+  const rest = knownAircraft.filter((a) => !cols.has(a)).sort((x, y) => acName(x).localeCompare(acName(y)));
+  $('addAircraft').innerHTML = `<option value="">${rest.length ? 'Set up another aircraft…' : 'No other aircraft flown yet'}</option>`
+    + rest.map((a) => `<option value="${esc(a)}">${esc(acName(a) !== a ? `${acName(a)} (${a})` : a)}</option>`).join('');
+  $('addAircraft').disabled = !rest.length;
+}
+$('addAircraft').onchange = () => { const a = $('addAircraft').value; if (a && !extraCols.includes(a)) extraCols.push(a); renderScreens(true); };
 
 // What a screen shows in the preview: the chosen aircraft's own choice, else its layout.
 function previewContent(s) {
-  const own = scAircraft ? aircraftDraft?.[scAircraft]?.[s.id] : null;
+  const own = previewAircraft ? aircraftDraft?.[previewAircraft]?.[s.id] : null;
   if (own?.kind === 'display') {
     const [w, h] = pictureSize(own.id);
-    return { layout: { id: '', name: displayNames[own.id] || own.id.toUpperCase(), width: w, height: h, gauges: [{ id: 'g', type: 'glass', x: 0, y: 0, w, h, options: { display: own.id } }] }, own };
+    return { layout: { id: '', name: dname(own.id), width: w, height: h, gauges: [{ id: 'g', type: 'glass', x: 0, y: 0, w, h, options: { display: own.id } }] }, own };
   }
   const id = own?.kind === 'layout' ? own.id : s.steam;
   return { layout: id ? (id === currentId && draft ? draft : layouts.find((l) => l.id === id)) : null, own };
 }
 
-function screensChanged() { screensDirty = true; $('btnScreens').disabled = false; refreshPreview(); }
+function screensChanged() { screensDirty = true; renderScreensToolbar(); refreshPreview(); }
 $('btnAddScreen').onclick = () => {
   let n = 1;
   while (screensDraft.some((s) => s.id === String(n))) n++;
   screensDraft.push({ id: String(n), name: `Screen ${n}`, glass: null, steam: layouts[0]?.id ?? null });
   screensChanged();
-  renderScreens();
+  renderScreens(true);
 };
+$('btnScreensRevert').onclick = () => { screensDraft = null; aircraftDraft = null; screensDirty = false; renderScreens(true); refreshPreview(); };
 $('btnScreens').onclick = () => {
   // Choices for removed screens go too.
   const ids = new Set(screensDraft.map((s) => s.id));
@@ -699,10 +782,31 @@ $('btnScreens').onclick = () => {
   }
   send({ type: 'setScreens', screens: screensDraft.map((s) => ({ ...s, name: s.name || `Screen ${s.id}` })), aircraft: aircraftDraft || perAircraft });
   screensDirty = false;
-  $('btnScreens').disabled = true;
+  renderScreensToolbar();
   $('screensMsg').textContent = 'Saved. Screens update straight away.';
   setTimeout(() => ($('screensMsg').textContent = ''), 3000);
 };
+
+// ---- tabs ----
+function setTab(tab) {
+  document.body.dataset.tab = tab;
+  for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === tab);
+  history.replaceState(null, '', tab === 'screens' ? '#screens' : location.pathname + location.search);
+  if (tab === 'screens') renderScreens(true);
+  else renderStage();
+  updateAppsSub();
+  updateSubs();
+}
+for (const b of document.querySelectorAll('[data-tab]')) b.onclick = (e) => { e.preventDefault(); setTab(b.dataset.tab); };
+// Connected display apps, for the status lines: only while the Screens tab is shown.
+let appsSub = false;
+function updateAppsSub() {
+  const want = connected && document.body.dataset.tab === 'screens' && !document.hidden;
+  if (want === appsSub) return;
+  appsSub = want;
+  send({ type: want ? 'subscribeApps' : 'unsubscribeApps' });
+  if (!want) apps = null;
+}
 
 // ---- toolbar ----
 function renderToolbar() {
@@ -790,7 +894,7 @@ function startDrag(e, g, mode) {
 window.addEventListener('resize', () => { renderStage(); if ($('preview').classList.contains('open')) renderPreview(); });
 
 // ---- preview of all screens ----
-$('btnPreview').onclick = () => { $('preview').classList.add('open'); renderPreview(); };
+$('btnPreview').onclick = () => { previewAircraft = ''; $('preview').classList.add('open'); renderPreview(); };
 // Screen edits (names, layouts, added screens) show in the preview before they are saved.
 function refreshPreview() { if ($('preview').classList.contains('open')) renderPreview(); }
 $('btnClosePreview').onclick = () => { $('preview').classList.remove('open'); updateSubs(); };
@@ -799,6 +903,7 @@ function renderPreview() {
   previewList = [];
   grid.innerHTML = '';
   const list = screensDraft && screensDraft.length ? screensDraft : screens;
+  $('previewHint').textContent = previewAircraft ? `With the choices for ${acName(previewAircraft)}` : 'Layouts for all aircraft (glass cockpits show their glass displays instead)';
   if (!list.length) { grid.innerHTML = '<div class="empty">No screens.</div>'; return; }
   // Size the cards so all screens fit: try 1..n columns and keep the biggest.
   const W = grid.clientWidth - 36, H = grid.clientHeight - 36, n = list.length;
@@ -813,7 +918,7 @@ function renderPreview() {
     const card = document.createElement('div');
     card.className = 'card';
     const lname = layout ? (layout === draft && dirty ? `${layout.name} (unsaved)` : layout.name) : '(no steam layout)';
-    const note = own ? ` · ${scAircraft} only` : s.glass ? ` · glass: ${displayNames[s.glass] || s.glass.toUpperCase()}` : '';
+    const note = own ? ` · ${acName(previewAircraft)} only` : s.glass ? ` · glass: ${dname(s.glass)}` : '';
     card.innerHTML = `<div class="t"><b>${esc(s.name || 'Screen ' + s.id)}</b> · ${esc(lname)}${esc(note)}</div>`;
     const box = document.createElement('div');
     box.className = 'screenbox';
@@ -1157,7 +1262,8 @@ function updateLive() {
 // ---- keyboard ----
 window.addEventListener('keydown', (e) => {
   if ($('preview').classList.contains('open')) return;
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (document.body.dataset.tab === 'screens') { if (screensDirty) $('btnScreens').click(); } else save(); return; }
+  if (document.body.dataset.tab === 'screens') return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
   const g = draft?.gauges.find((x) => x.id === selId);
   if (!g) return;
@@ -1178,12 +1284,14 @@ window.addEventListener('beforeunload', (e) => { if (dirty || screensDirty) { e.
 let saved = 'demo';
 try { saved = localStorage.getItem('clEditorData') || 'demo'; } catch {}
 setDataMode(saved === 'live' ? 'live' : 'demo');
+setTab(location.hash === '#screens' ? 'screens' : 'layouts');
 connect();
 // A hidden tab (minimised, another tab in front) costs the sim nothing: previews and the catalog's
 // picture grabs stop, and start again when the tab is shown.
 document.addEventListener('visibilitychange', () => {
   send({ type: document.hidden ? 'unsubscribeCatalog' : 'subscribeCatalog' });
   updateSubs();
+  updateAppsSub();
 });
 </script>
 </body>

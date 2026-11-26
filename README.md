@@ -296,13 +296,18 @@ Open `http://<sim PC>:8800/editor` in a browser. It is also linked from the moni
 
   A glass item can show a whole display or just part of it: drag on the picture in its properties to
   pick the part, for example the ADF frequency from a radio display next to your steam gauges.
-- **Screens.** Add or remove screens (1 to 16), name them, and pick for each one the glass display and
-  the steam layout it shows. A client window set to *Screen N* follows these choices.
-- **Per-aircraft screens.** Under *Screens*, choose an aircraft in *For* and give any screen its own
-  layout or glass display for that aircraft, for example a layout made just for the TBM 930 on screen 2.
-  Whenever that aircraft is loaded, those screens show it straight away. Screens left on *Default*
-  keep the automatic glass/steam choice. Every aircraft you have flown is in the list.
-- **Preview all screens** (`/editor#preview`) shows every screen at once.
+- **Screens tab.** A table with one row per physical screen (1 to 16): add, remove and name them.
+  Each row also says what the screen shows right now and which display app shows it. A client window
+  set to *Screen N* follows these choices.
+  - **All aircraft:** the normal rules. Glass cockpits show the chosen glass display (*Automatic*: the
+    cockpit's own displays, PFD first), and other aircraft show the chosen layout.
+  - **One column per aircraft** with its own choices: give any screen a layout or glass display for
+    that aircraft, for example a layout made just for the TBM 930 on screen 2. Whenever that aircraft
+    is loaded, those screens show it straight away; cells left on *Same as all aircraft* keep the
+    normal rules. The loaded aircraft always has a column; *Set up another aircraft* adds any aircraft
+    you have flown. Aircraft show their names from the sim (once they have been loaded).
+- **Preview all screens** (`/editor#preview`) shows every screen at once; on the Screens tab, each
+  column's *Preview* shows them with that aircraft's choices. `/editor#screens` opens the Screens tab.
 
 Airspeed arcs come from the sim (stall speeds, Vne). The sim has no values for Vfe and Vno: these come from
 aircraft profiles in `host/defaults/aircraft.json` and are estimated when an aircraft is not listed.

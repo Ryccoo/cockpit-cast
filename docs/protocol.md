@@ -146,7 +146,8 @@ Host to client:
 { "type": "screens", "screens": [ { "id": "1", "name": "Screen 1", "mode": "glass", "show": { "kind": "display", "id": "pfd" } },
                                   { "id": "2", "name": "Screen 2", "mode": "steam", "show": { "kind": "layout", "id": "engine-radios" }, "custom": false } ],
   "aircraft": "asobo_c152", "perAircraft": { "asobo_tbm930": { "2": { "kind": "layout", "id": "tbm-panel" } } },
-  "knownAircraft": ["asobo_c152", "asobo_tbm930"] }
+  "knownAircraft": ["asobo_c152", "asobo_tbm930"],
+  "aircraftNames": { "asobo_c152": "Cessna 152 Asobo" } }
 { "type": "layoutSaved", "id": "six-pack" }
 { "type": "catalog", "simRunning": true, "aircraft": "asobo_sr22_g3x", "present": ["g3x-pfd-1", "gtn750"],
   "aircraftList": [ { "name": "asobo_sr22_g3x", "lastSeen": "2026-11-25T13:20:30Z", "displays": ["g3x-pfd-1", "gtn750"] },
@@ -172,7 +173,8 @@ Host to client:
   `display` (subscribe to that display), `layout` (subscribe to data, draw that layout) or `waiting`.
   Per-aircraft choices (`perAircraft`, by aircraft folder name): while that aircraft is loaded, a screen
   with a choice shows it (`custom: true`) whatever the mode, and its glass display is not given to another
-  screen. Clients read only `screens`; `aircraft`, `perAircraft` and `knownAircraft` are for the editor.
+  screen. Clients read only `screens`; `aircraft`, `perAircraft`, `knownAircraft` and `aircraftNames` (the
+  sim's title for aircraft seen loaded, kept in `aircraft-names.json`) are for the editor.
 
 ### Binary messages (frames)
 
