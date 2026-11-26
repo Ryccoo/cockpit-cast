@@ -107,8 +107,10 @@ export class LocalScreens extends EventEmitter {
         monitor: l.monitor,
         area: l.area ?? 'full',
         fit: l.fit ?? 'contain',
-        // Glass displays only for now; a steam layout leaves the window black.
+        // Glass displays only for now; a steam layout leaves the window black, with a note.
         display: s.show?.kind === 'display' ? s.show.id : null,
+        label: s.name,
+        note: s.show?.kind === 'layout' ? `Steam gauges (${this.layoutName?.(s.show.id) ?? s.show.id}) are not shown on this PC yet` : null,
       });
     }
     return out;

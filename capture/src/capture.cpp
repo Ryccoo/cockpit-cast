@@ -13,8 +13,10 @@
 //    pool checks the marker again, skips unchanged pictures and sends JPEGs to the host.
 //
 // 5. Local screens (displays the host wants on this PC): copy the display's area into one of 3 shared
-//    GPU textures; once the copy has finished, publish it in shared memory for the local screen viewer
-//    (localshare.h). No readback and no JPEG for those.
+//    GPU textures, plus its 2 marker pixels into a small readback buffer; once the copy has finished and
+//    the marker is right, publish it in shared memory for the local screen viewer (localshare.h). No JPEG
+//    for those. A wrong marker (the sim reused the texture's memory, e.g. while it runs in the
+//    background) drops the frame, so the viewer keeps the last good one; 3 in a row: look again.
 //
 // RunFrame runs from Present (or from ExecuteCommandLists if Present never comes), at most once per
 // call and never blocking: if another thread is in it, the call returns at once.
@@ -140,7 +142,11 @@ struct Display {
         HANDLE handle = nullptr;
         uint64_t fence = 0;
         bool copying = false;
+        bool bgra = false;  // byte order of the source, for the marker check
     } share[localshare::kSlots];
+    ID3D12Resource* shareMarkBuf = nullptr;  // readback: the 2 marker pixels of each slot's copy
+    uint8_t* shareMark = nullptr;
+    uint64_t localDropped = 0;
     int shareEntry = -1;
     UINT shareW = 0, shareH = 0;
     DXGI_FORMAT shareFmt = DXGI_FORMAT_UNKNOWN;
@@ -580,6 +586,12 @@ void ReleaseShare(Display& d) {
         if (sh.handle) CloseHandle(sh.handle);
         sh = {};
     }
+    if (d.shareMarkBuf) {
+        d.shareMarkBuf->Unmap(0, nullptr);
+        d.shareMarkBuf->Release();
+        d.shareMarkBuf = nullptr;
+        d.shareMark = nullptr;
+    }
     d.shareW = d.shareH = 0;
     d.shareFmt = DXGI_FORMAT_UNKNOWN;
     if (g_share && d.shareEntry >= 0) InterlockedExchange(&g_share->displays[d.shareEntry].active, 0);
@@ -645,6 +657,12 @@ bool EnsureShareTextures(Display& d, UINT w, UINT h, DXGI_FORMAT srcFormat) {
             return false;
         }
     }
+    d.shareMarkBuf = CreateReadback(uint64_t(localshare::kSlots) * kProbeCellBytes);
+    D3D12_RANGE none{0, 0};
+    if (!d.shareMarkBuf || FAILED(d.shareMarkBuf->Map(0, &none, (void**)&d.shareMark))) {
+        ReleaseShare(d);
+        return false;
+    }
     d.shareW = w;
     d.shareH = h;
     d.shareFmt = fmt;
@@ -684,6 +702,15 @@ void RecordLocalCopies(ID3D12GraphicsCommandList* list, double nowSec, uint64_t 
         src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         src.SubresourceIndex = 0;
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
+        // The display's marker pixels (its top-left corner), checked before the frame is shown.
+        D3D12_TEXTURE_COPY_LOCATION mdst{};
+        mdst.pResource = d.shareMarkBuf;
+        mdst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        mdst.PlacedFootprint.Offset = uint64_t(k) * kProbeCellBytes;
+        mdst.PlacedFootprint.Footprint = {t->desc.Format, 2, 1, 1, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT};
+        D3D12_BOX mbox{box.left, box.top, 0, box.left + 2, box.top + 1, 1};
+        list->CopyTextureRegion(&mdst, 0, 0, 0, &src, &mbox);
+        d.share[k].bgra = IsBgra(t->desc.Format);
         d.share[k].copying = true;
         d.share[k].fence = nextFence;
         const_cast<Tracked*>(t)->lastUseFence = nextFence;
@@ -707,6 +734,19 @@ void PublishLocalCopies(uint64_t completed) {
             auto& sh = d.share[k];
             if (sh.copying && completed >= sh.fence) {
                 sh.copying = false;
+                const uint8_t* px = d.shareMark + uint64_t(k) * kProbeCellBytes;
+                if (!PixelNear(px, sh.bgra, d.cfg.marker[0]) || !PixelNear(px + 4, sh.bgra, d.cfg.marker[1])) {
+                    // Not the display (its texture was freed or reused): keep showing the last good frame.
+                    ++d.localDropped;
+                    g_forceProbe = true;
+                    if (++d.mismatches >= 3 && d.mapped) {
+                        Log("%s: marker missing in %d local frames; looking for the texture again", d.id.c_str(), d.mismatches);
+                        d.mapped = nullptr;
+                        d.mismatches = 0;
+                    }
+                    continue;
+                }
+                d.mismatches = 0;
                 if (sh.fence >= newestFence) {
                     newest = k;
                     newestFence = sh.fence;
@@ -1129,10 +1169,10 @@ void StatsTick() {
         for (auto& d : g_displays) {
             char b[256];
             const Tracked* t = d->mapped ? FindTracked(d->mapped) : nullptr;
-            snprintf(b, sizeof b, "%s\"%s\":{\"enabled\":%s,\"fps\":%g,\"local\":%s,\"matched\":%s,\"texture\":\"%llux%u\",\"submitted\":%llu,\"localFrames\":%llu}",
+            snprintf(b, sizeof b, "%s\"%s\":{\"enabled\":%s,\"fps\":%g,\"local\":%s,\"matched\":%s,\"texture\":\"%llux%u\",\"submitted\":%llu,\"localFrames\":%llu,\"localDropped\":%llu}",
                      displays.empty() ? "" : ",", d->id.c_str(), d->cfg.enabled ? "true" : "false", d->cfg.maxFps, d->cfg.local ? "true" : "false",
                      t ? "true" : "false", t ? (unsigned long long)t->desc.Width : 0ull, t ? t->desc.Height : 0u, (unsigned long long)d->submitted,
-                     (unsigned long long)d->localFrames);
+                     (unsigned long long)d->localFrames, (unsigned long long)d->localDropped);
             displays += b;
         }
         runFrames = g_runFrames;

@@ -7,10 +7,11 @@
 // no readback, no JPEG, no network. The windows never take the focus from the sim.
 //
 // Host -> viewer (stdin, one JSON object per line):
-//   {"type":"windows","windows":[{"id":"1","monitor":1,"area":"left","display":"pfd","fit":"contain"}]}
+//   {"type":"windows","windows":[{"id":"1","monitor":1,"area":"left","display":"pfd","fit":"contain","label":"PFD","note":null}]}
 //     area: "full", "left", "right", "top", "bottom", or {"x":0,"y":0,"w":0.5,"h":1} (fractions of the monitor)
 //     display: the glass display to draw, or null (the window stays black)
 //     fit: "contain" (default; letterbox), "fill" (stretch), "cover" (crop to fill)
+//     label, note: shown dimly in the middle while there is no picture (the screen's name; why it is empty)
 // Viewer -> host (stdout, one JSON object per line):
 //   {"type":"monitors","monitors":[{"index":0,"name":"\\\\.\\DISPLAY1","x":0,"y":0,"w":2560,"h":1440,"primary":true}]}
 //   {"type":"stats","windows":[{"id":"1","display":"pfd","frames":1800,"state":"live"}]}   every 5 s
@@ -21,8 +22,10 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <d2d1.h>
 #include <d3d11_1.h>
 #include <d3dcompiler.h>
+#include <dwrite.h>
 #include <dxgi1_2.h>
 #include <timeapi.h>
 
@@ -148,6 +151,8 @@ V vs(uint id : SV_VertexID) {
 float4 ps(V i) : SV_Target { return float4(tex.Sample(smp, i.uv).rgb, 1); }
 )";
 ID3D11Buffer* g_cb = nullptr;
+ID2D1Factory* g_d2d = nullptr;
+IDWriteFactory* g_dwrite = nullptr;
 
 void ReleaseDevice();
 
@@ -269,7 +274,8 @@ Opened* OpenEntry(int entry) {
 
 // ---------------- screen windows ----------------
 struct Screen {
-    std::string id, display, fit = "contain";
+    std::string id, display, fit = "contain", label, note;
+    std::wstring drawnText;  // the waiting text last drawn
     int monitor = 0;
     double ax = 0, ay = 0, aw = 1, ah = 1;  // area, fractions of the monitor
     HWND hwnd = nullptr;
@@ -293,6 +299,8 @@ void ReleaseChain(Screen& s) {
 }
 
 void ReleaseDevice() {
+    if (g_d2d) g_d2d->Release();
+    g_d2d = nullptr;
     for (auto& [k, o] : g_opened) o.Release();
     g_opened.clear();
     for (auto& s : g_screens) ReleaseChain(*s);
@@ -424,6 +432,78 @@ bool Draw(Screen& s, ID3D11ShaderResourceView* srv, UINT tw, UINT th) {
     return hr != DXGI_ERROR_DEVICE_REMOVED && hr != DXGI_ERROR_DEVICE_RESET;
 }
 
+// ---------------- waiting text (Direct2D / DirectWrite on the swap chain's buffer) ----------------
+
+std::wstring Wide(const std::string& s) {
+    if (s.empty()) return {};
+    int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), nullptr, 0);
+    std::wstring w(size_t(n), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.data(), int(s.size()), w.data(), n);
+    return w;
+}
+
+// Black, with the screen's name and a dim line saying why there is no picture, in the middle.
+bool DrawWaiting(Screen& s, const std::wstring& title, const std::wstring& line) {
+    if (!EnsureChain(s)) return true;
+    float black[4] = {0, 0, 0, 1};
+    g_ctx->ClearRenderTargetView(s.rtv, black);
+    g_ctx->Flush();
+    if (!g_d2d) D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_d2d);
+    if (!g_dwrite) DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&g_dwrite));
+    IDXGISurface* surface = nullptr;
+    if (g_d2d && g_dwrite && SUCCEEDED(s.chain->GetBuffer(0, IID_PPV_ARGS(&surface)))) {
+        D2D1_RENDER_TARGET_PROPERTIES rp = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE), 96, 96);
+        ID2D1RenderTarget* rt = nullptr;
+        HRESULT hrRt = g_d2d->CreateDxgiSurfaceRenderTarget(surface, &rp, &rt);
+        if (FAILED(hrRt)) {
+            char b[96];
+            snprintf(b, sizeof b, "waiting text: no Direct2D target (0x%08lx)", hrRt);
+            LogLine(b);
+        }
+        if (SUCCEEDED(hrRt)) {
+            float W = float(s.bw), H = float(s.bh);
+            float big = std::clamp(std::min(W, H) * 0.07f, 12.0f, 48.0f), note = std::clamp(big * 0.55f, 10.0f, 24.0f);
+            IDWriteTextFormat *f1 = nullptr, *f2 = nullptr;
+            g_dwrite->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, big, L"", &f1);
+            g_dwrite->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, note, L"", &f2);
+            ID2D1SolidColorBrush *b1 = nullptr, *b2 = nullptr;
+            rt->CreateSolidColorBrush(D2D1::ColorF(0.55f, 0.6f, 0.65f), &b1);
+            rt->CreateSolidColorBrush(D2D1::ColorF(0.38f, 0.42f, 0.46f), &b2);
+            rt->BeginDraw();
+            if (f1 && f2 && b1 && b2) {
+                for (IDWriteTextFormat* f : {f1, f2}) {
+                    f->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                    f->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+                }
+                float pad = W * 0.06f, mid = H / 2;
+                rt->DrawText(title.c_str(), UINT32(title.size()), f1, D2D1::RectF(pad, mid - big * 1.5f, W - pad, mid), b1);
+                rt->DrawText(line.c_str(), UINT32(line.size()), f2, D2D1::RectF(pad, mid + note * 0.3f, W - pad, H - pad), b2);
+            }
+            HRESULT hrEnd = rt->EndDraw();
+            if (FAILED(hrEnd)) {
+                char b[96];
+                snprintf(b, sizeof b, "waiting text: drawing failed (0x%08lx)", hrEnd);
+                LogLine(b);
+            }
+            for (IUnknown* u : std::initializer_list<IUnknown*>{f1, f2, b1, b2, rt})
+                if (u) u->Release();
+        }
+        surface->Release();
+    }
+    HRESULT hr = s.chain->Present(0, 0);
+    return hr != DXGI_ERROR_DEVICE_REMOVED && hr != DXGI_ERROR_DEVICE_RESET;
+}
+
+// What an empty screen says: the sim is not there yet, its display has no picture yet, or the host's note.
+std::wstring WaitingLine(const Screen& s, bool share) {
+    if (!s.note.empty()) return Wide(s.note);
+    if (s.display.empty()) return L"Nothing to show";
+    if (!share) return L"Waiting for MSFS";
+    std::string d = s.display;
+    for (auto& c : d) c = char(toupper(static_cast<unsigned char>(c)));
+    return L"Waiting for the " + Wide(d);
+}
+
 // One pass over all screens: draw those with a new frame (or a new size). Returns false: recreate the device.
 bool Tick() {
     bool share = ShareOk();
@@ -439,14 +519,19 @@ bool Tick() {
     for (auto& sp : g_screens) {
         Screen& s = *sp;
         int entry = share && !s.display.empty() ? FindEntry(s.display) : -1;
+        if (entry >= 0 && g_share->displays[entry].latest < 0) entry = -1;  // set up, no picture yet
         if (entry < 0) {
-            if (s.dirty || s.drawnSeq != -1) {  // nothing to show: black
-                if (!Draw(s, nullptr, 0, 0)) return false;
+            std::wstring title = Wide(s.label.empty() ? "Screen " + s.id : s.label);
+            std::wstring line = WaitingLine(s, share);
+            if (s.dirty || s.drawnSeq != -1 || s.drawnText != title + L"\n" + line) {  // nothing to show: say why
+                if (!DrawWaiting(s, title, line)) return false;
                 s.dirty = false;
                 s.drawnSeq = -1;
+                s.drawnText = title + L"\n" + line;
             }
             continue;
         }
+        s.drawnText.clear();
         auto& e = g_share->displays[entry];
         long seq = e.seq;
         if (!s.dirty && seq == s.drawnSeq && e.gen == s.drawnGen) continue;
@@ -499,6 +584,8 @@ void ApplyWindows(const JValue& list) {
         }
         s->display = w["display"].asString();
         s->fit = w["fit"].asString();
+        s->label = w["label"].asString();
+        s->note = w["note"].asString();
         Place(*s);
         next.push_back(std::move(s));
     }

@@ -11,6 +11,6 @@ add_compile_definitions(UNICODE _UNICODE)
 # Local screens on the sim PC (started by the host): borderless windows that draw the sim's glass displays
 # straight from shared GPU textures. WIN32: no console window; the host talks to it over stdin/stdout.
 add_executable(cockpitcast-screens WIN32 src/screens.cpp)
-target_link_libraries(cockpitcast-screens PRIVATE d3d11 dxgi d3dcompiler user32 winmm)
+target_link_libraries(cockpitcast-screens PRIVATE d3d11 dxgi d3dcompiler d2d1 dwrite user32 winmm)
 target_link_options(cockpitcast-screens PRIVATE $<$<CONFIG:Release>:/DEBUG /OPT:REF /OPT:ICF>)
 target_compile_options(cockpitcast-screens PRIVATE $<$<CONFIG:Release>:/Zi>)

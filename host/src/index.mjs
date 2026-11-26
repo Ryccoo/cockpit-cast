@@ -52,6 +52,7 @@ const screens = new Screens({ cfg, sim, hook, registry, instruments });
 const localScreens = new LocalScreens({ cfg, screens, captureConfig });
 screens.localMonitors = () => localScreens.monitors;
 screens.localState = () => localScreens.state();
+localScreens.layoutName = (id) => layouts.list().find((l) => l.id === id)?.name ?? null;
 // For the editor's Insert window: displays by aircraft, with a saved picture of each.
 const catalog = new DisplayCatalog({ registry, instruments, hook, sim, hub, dataDir: cfg.dataDir });
 registry.on('change', () => {
