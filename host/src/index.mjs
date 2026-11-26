@@ -238,6 +238,7 @@ const tray = new Tray({
 });
 tray.on('quit', shutdown);
 tray.on('local-toggle', () => localScreens.setEnabled(!localScreens.enabled));
+localScreens.on('open', () => tray.showApp());
 localScreens.on('state', (s) => tray.setLocal(s));
 tray.setLocal(localScreens.state());
 tray.on('update', () => installUpdate().catch((e) => log.warn(`update failed: ${e.message}`)));

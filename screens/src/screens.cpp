@@ -16,11 +16,14 @@
 //   {"type":"monitors","monitors":[{"index":0,"name":"\\\\.\\DISPLAY1","x":0,"y":0,"w":2560,"h":1440,"primary":true}]}
 //   {"type":"stats","windows":[{"id":"1","display":"pfd","frames":1800,"state":"live"}]}   every 5 s
 //   {"type":"log","message":"..."}
+//   {"type":"action","action":"off"|"open"}   from a screen's right-click menu: turn local screens off,
+//                                             or show the CockpitCast window
 // The viewer ends when stdin closes (the host is gone).
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <windowsx.h>
 
 #include <d2d1.h>
 #include <d3d11_1.h>
@@ -316,6 +319,19 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_MOUSEACTIVATE:
             return MA_NOACTIVATE;  // clicking a screen never takes the focus from the sim
+        case WM_RBUTTONUP: {  // the way out: turn local screens off, or open CockpitCast
+            HMENU m = CreatePopupMenu();
+            AppendMenuW(m, MF_STRING, 1, L"Turn local screens off");
+            AppendMenuW(m, MF_STRING, 2, L"Open CockpitCast");
+            POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ClientToScreen(h, &pt);
+            SetForegroundWindow(h);  // so the menu closes when clicking elsewhere
+            UINT cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.x, pt.y, 0, h, nullptr);
+            DestroyMenu(m);
+            if (cmd == 1) Out("{\"type\":\"action\",\"action\":\"off\"}");
+            else if (cmd == 2) AllowSetForegroundWindow(ASFW_ANY), Out("{\"type\":\"action\",\"action\":\"open\"}");
+            return 0;
+        }
         case WM_ERASEBKGND:
             return 1;
         case WM_SIZE:
@@ -345,12 +361,13 @@ RECT AreaRect(const Screen& s) {
 void Place(Screen& s) {
     RECT r = AreaRect(s);
     if (!s.hwnd) {
-        // Topmost: cockpit screens stay above other windows on their monitor (never above the sim on another).
-        s.hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, kClass, L"CockpitCast screen", WS_POPUP, r.left, r.top, r.right - r.left, r.bottom - r.top,
+        // Not topmost: on a dedicated monitor nothing covers it anyway, and any window brought forward
+        // (Alt+Tab, the CockpitCast window) still can, so a screen can never lock anyone out.
+        s.hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, kClass, L"CockpitCast screen", WS_POPUP, r.left, r.top, r.right - r.left, r.bottom - r.top,
                                  nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
         ShowWindow(s.hwnd, SW_SHOWNOACTIVATE);
     } else {
-        SetWindowPos(s.hwnd, HWND_TOPMOST, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOACTIVATE);
+        SetWindowPos(s.hwnd, nullptr, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
     }
     s.dirty = true;
 }

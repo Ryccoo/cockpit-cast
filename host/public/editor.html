@@ -180,7 +180,6 @@
       <span id="dirty" class="dirty"></span>
       <span class="grow"></span>
       <span class="seg" title="Where the needles get their values"><button data-mode="live">Live data</button><button data-mode="demo">Demo</button></span>
-      <button id="btnPreview">Preview all screens</button>
       <label>Grid <select id="grid"><option value="0">off</option><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select></label>
       <label title="Round gauges stay square when resized (glass items keep their own shape)"><input type="checkbox" id="square" checked> keep round</label>
     </div>
@@ -203,6 +202,7 @@
     <span id="screensDirty" class="dirty"></span>
     <span id="screensMsg" class="hint"></span>
     <span class="grow"></span>
+    <button id="btnPreviewNow" title="What every screen shows right now">Preview now</button>
     <button id="btnLocal" style="display:none" title="Show or hide all screens set to &quot;On this PC&quot; at once; their monitors and areas stay set">Local screens: on</button>
     <button id="btnAddScreen">Add screen</button>
     <select id="addAircraft" title="Give another aircraft its own choices"></select>
@@ -454,7 +454,7 @@ function updateSubs() {
   // them would take capture slots from real ones), one picture every 5 s: previews only.
   if ($('insert').classList.contains('open')) for (const id of catalog ? catalog.present : displayIds.filter((x) => displayInfo[x]?.live)) add(id, 0.2);
   else if ($('preview').classList.contains('open')) {
-    for (const sc of screensDraft && screensDraft.length ? screensDraft : screens) for (const id of glassOf(previewContent(sc).layout)) add(id, 10);
+    for (const sc of screens) for (const id of glassOf(previewContent(sc).layout)) add(id, 10);
   } else for (const id of glassOf(draft)) add(id, 10);
   applySubs(want);
 }
@@ -665,7 +665,6 @@ let perAircraft = {}, aircraftDraft = null, knownAircraft = [], loadedAircraft =
 let localMonitors = [];      // monitors of this PC, for "On this PC" (the host's local screen viewer)
 let localState = 'none';     // all local screens: 'none' (none set up), 'on' or 'off'
 let extraCols = [];          // aircraft columns added on this page that have no choices yet
-let previewAircraft = '';    // whose choices the preview shows ('' = all aircraft)
 let apps = null;             // connected display apps (host 'apps' message, while this tab is shown)
 const acName = (a) => aircraftNames[a] || a;
 const dname = (id) => displayNames[id] || catalog?.displays?.[id]?.name || String(id).toUpperCase();
@@ -711,12 +710,12 @@ function renderScreens(force) {
   const allDisplays = [...new Set([...displayIds, ...Object.keys(catalog?.displays ?? {})])];
   const opt = (v, text, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(text)}</option>`;
 
-  let h = `<thead><tr><th class="sc">Screen</th><th>All aircraft<div class="sub">the normal rules</div><div class="row"><button class="icon" data-prev="">Preview</button></div></th>`;
+  let h = `<thead><tr><th class="sc">Screen</th><th>All aircraft<div class="sub">the normal rules</div></th>`;
   for (const a of cols) {
     const n = Object.keys(aircraftDraft[a] || {}).length;
     h += `<th title="${esc(a)}"><span class="an">${esc(acName(a))}</span> ${a === loadedAircraft ? '<span class="badge">loaded now</span>' : ''}
       <div class="sub">${esc(acName(a) !== a ? a : 'its full name shows once it is loaded')}</div>
-      <div class="row"><button class="icon" data-prev="${esc(a)}">Preview</button>${a !== loadedAircraft
+      <div class="row">${a !== loadedAircraft
         ? `<button class="icon danger" data-remove="${esc(a)}" data-n="${n}" title="Remove this aircraft's column${n ? ' and its own choices' : ''}">Remove</button>`
         : n ? `<button class="icon danger" data-clear="${esc(a)}" title="Remove this aircraft's own choices (the loaded aircraft always has a column)">Reset</button>` : ''}</div></th>`;
   }
@@ -771,7 +770,6 @@ function renderScreens(force) {
     renderScreens(true);
   };
   for (const b of $('scTable').querySelectorAll('[data-del]')) b.onclick = () => { screensDraft.splice(+b.dataset.del, 1); screensChanged(); renderScreens(true); };
-  for (const b of $('scTable').querySelectorAll('[data-prev]')) b.onclick = () => { previewAircraft = b.dataset.prev; $('preview').classList.add('open'); renderPreview(); updateSubs(); };
   // Remove an aircraft's column, and its own choices (asks first when it has some).
   for (const b of $('scTable').querySelectorAll('[data-remove]')) b.onclick = () => {
     const a = b.dataset.remove, hasChoices = +b.dataset.n > 0;
@@ -813,7 +811,9 @@ function localControls(d, i) {
   const areas = [['full', 'Whole monitor'], ['left', 'Left half'], ['right', 'Right half'], ['top', 'Top half'], ['bottom', 'Bottom half']].map(([v, t]) => opt(v, t, area)).join('');
   if (!localMonitors.length && !d.local) return '<div class="sub" title="Needs the host on Windows, with its local screen viewer">On this PC: not available</div>';
   return `<label class="f local" title="Show this screen on this PC (the sim PC), in a borderless window: no display app needed">On this PC <select data-i="${i}" data-local="monitor">${monitors}</select></label>`
-    + (d.local ? `<label class="f local" title="Part of the monitor: two screens can share one (left and right half)">Area <select data-i="${i}" data-local="area">${areas}</select></label>` : '');
+    + (d.local ? `<label class="f local" title="Part of the monitor: two screens can share one (left and right half)">Area <select data-i="${i}" data-local="area">${areas}</select></label>` : '')
+    + (d.local && localMonitors.find((m) => m.index === d.local.monitor)?.primary
+      ? '<div class="sub warn">This is your main monitor: the screen covers it. To get it back, right-click the screen and choose Turn local screens off.</div>' : '');
 }
 
 // Toolbar: save state, local screens on/off, and the aircraft that can get a column.
@@ -836,15 +836,6 @@ $('btnLocal').onclick = () => send({ type: 'setLocalScreens', on: localState !==
 $('addAircraft').onchange = () => { const a = $('addAircraft').value; if (a && !extraCols.includes(a)) extraCols.push(a); renderScreens(true); };
 
 // What a screen shows in the preview: the chosen aircraft's own choice, else its layout.
-function previewContent(s) {
-  const own = previewAircraft ? aircraftDraft?.[previewAircraft]?.[s.id] : null;
-  if (own?.kind === 'display') {
-    const [w, h] = pictureSize(own.id);
-    return { layout: { id: '', name: dname(own.id), width: w, height: h, gauges: [{ id: 'g', type: 'glass', x: 0, y: 0, w, h, options: { display: own.id } }] }, own };
-  }
-  const id = own?.kind === 'layout' ? own.id : s.steam;
-  return { layout: id ? (id === currentId && draft ? draft : layouts.find((l) => l.id === id)) : null, own };
-}
 
 function screensChanged() { screensDirty = true; renderScreensToolbar(); refreshPreview(); }
 $('btnAddScreen').onclick = () => {
@@ -1053,8 +1044,22 @@ function startDrag(e, g, mode) {
 }
 window.addEventListener('resize', () => { renderStage(); if ($('preview').classList.contains('open')) renderPreview(); });
 
-// ---- preview of all screens ----
-$('btnPreview').onclick = () => { previewAircraft = ''; $('preview').classList.add('open'); renderPreview(); };
+// ---- preview: what every screen shows right now (the host's live state, saved settings) ----
+// A glass display (live picture when the sim runs), a layout, or nothing yet. It never guesses: other
+// aircraft and glass/steam rules are described in the Screens table instead.
+function previewContent(s) {
+  const show = s.show;
+  if (show?.kind === 'display') {
+    const [w, h] = pictureSize(show.id);
+    return { what: dname(show.id), layout: { id: '', name: dname(show.id), width: w, height: h, gauges: [{ id: 'g', type: 'glass', x: 0, y: 0, w, h, options: { display: show.id } }] } };
+  }
+  if (show?.kind === 'layout') {
+    const l = show.id === currentId && draft ? draft : layouts.find((x) => x.id === show.id);
+    return { what: l ? l.name : show.id, layout: l ?? null };
+  }
+  return { what: 'nothing yet', layout: null };
+}
+$('btnPreviewNow').onclick = () => { $('preview').classList.add('open'); renderPreview(); updateSubs(); };
 // Screen edits (names, layouts, added screens) show in the preview before they are saved.
 function refreshPreview() { if ($('preview').classList.contains('open')) renderPreview(); }
 $('btnClosePreview').onclick = () => { $('preview').classList.remove('open'); updateSubs(); };
@@ -1062,8 +1067,8 @@ function renderPreview() {
   const grid = $('previewGrid');
   previewList = [];
   grid.innerHTML = '';
-  const list = screensDraft && screensDraft.length ? screensDraft : screens;
-  $('previewHint').textContent = previewAircraft ? `With the choices for ${acName(previewAircraft)}` : 'Layouts for all aircraft (glass cockpits show their glass displays instead)';
+  const list = screens;
+  $('previewHint').textContent = `What each screen shows now${loadedAircraft ? ` in the ${acName(loadedAircraft)}` : ''} (saved settings).`;
   if (!list.length) { grid.innerHTML = '<div class="empty">No screens.</div>'; return; }
   // Size the cards so all screens fit: try 1..n columns and keep the biggest.
   const W = grid.clientWidth - 36, H = grid.clientHeight - 36, n = list.length;
@@ -1074,12 +1079,12 @@ function renderPreview() {
     if (w > best.w) best = { cols, w };
   }
   for (const s of list) {
-    const { layout, own } = previewContent(s);
+    const { layout, what } = previewContent(s);
     const card = document.createElement('div');
     card.className = 'card';
-    const lname = layout ? (layout === draft && dirty ? `${layout.name} (unsaved)` : layout.name) : '(no steam layout)';
-    const note = own ? ` · ${acName(previewAircraft)} only` : s.glass ? ` · glass: ${dname(s.glass)}` : '';
-    card.innerHTML = `<div class="t"><b>${esc(s.name || 'Screen ' + s.id)}</b> · ${esc(lname)}${esc(note)}</div>`;
+    const note = s.custom && loadedAircraft ? ` \u00b7 ${acName(loadedAircraft)}'s own choice` : '';
+    const unsaved = layout && layout === draft && dirty ? ' (unsaved)' : '';
+    card.innerHTML = `<div class="t"><b>${esc(s.name || 'Screen ' + s.id)}</b> \u00b7 ${esc(what + unsaved + note)}</div>`;
     const box = document.createElement('div');
     box.className = 'screenbox';
     const bw = best.w, bh = layout ? (bw * layout.height) / layout.width : bw / 1.5;
@@ -1094,7 +1099,7 @@ function renderPreview() {
       for (const cap of inner.querySelectorAll('.cap')) cap.remove(); // the screens show no captions
       box.appendChild(inner);
     } else {
-      box.innerHTML = '<div class="none">No steam layout assigned</div>';
+      box.innerHTML = '<div class="none">Nothing yet: waiting for a flight</div>';
     }
     card.appendChild(box);
     grid.appendChild(card);

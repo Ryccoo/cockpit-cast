@@ -402,6 +402,7 @@ void OnLine(const std::wstring& line) {
   else if (cmd == L"monitor" && !rest.empty()) g_monitor = rest;
   else if (cmd == L"support" && rest.rfind(L"https://", 0) == 0) g_support = rest;
   else if (cmd == L"local") g_local = rest;
+  else if (cmd == L"show") ShowApp(g_editor);  // e.g. "Open CockpitCast" in a local screen's menu
   else if (cmd == L"update" && !rest.empty() && rest.size() < 32) {
     if (rest != g_update) Notify(L"CockpitCast update", L"Version " + rest + L" is available. Right-click the CockpitCast icon to install it.", NIIF_INFO);
     g_update = rest;

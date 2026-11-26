@@ -94,6 +94,8 @@ export class LocalScreens extends EventEmitter {
       this.update();
     } else if (m.type === 'stats') this.stats = m;
     else if (m.type === 'log') log.info(`viewer: ${m.message}`);
+    else if (m.type === 'action' && m.action === 'off') this.setEnabled(false);
+    else if (m.type === 'action' && m.action === 'open') this.emit('open');
   }
 
   /// The viewer's windows: screens set to show on this PC, with what each one shows now.

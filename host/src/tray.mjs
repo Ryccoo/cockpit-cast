@@ -90,6 +90,11 @@ export class Tray extends EventEmitter {
     if (version) this.write(`update ${version}`);
   }
 
+  /// Show the CockpitCast window (the editor).
+  showApp() {
+    this.write('show');
+  }
+
   /// Local screens: 'none' (menu item hidden), 'on' or 'off' (ticked or not).
   setLocal(state) {
     if (state === this.localState) return;
