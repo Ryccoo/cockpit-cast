@@ -103,6 +103,11 @@ After every MSFS update, run **Repair Community hook** from the Start menu (sim 
 contains a copy of a sim file that updates change. Uninstalling removes the program and the hook, and
 asks whether to keep your learned displays and layouts.
 
+If you moved your add-ons to another drive (for example with Addons Linker), setup may not find the
+Community folder. It then asks you to choose the folder the sim loads add-ons from. **Repair Community
+hook** asks for it as well, in its window. CockpitCast remembers the choice, so repairs after sim updates
+use it too.
+
 ### Updates
 
 Installed copies update themselves; there is no need to download a new installer or pull the code.
@@ -152,8 +157,14 @@ node hook/install-hook.mjs    # copies it into the Community folder
 `build-hook.mjs` looks for the stock file in the default Steam install. For other locations, such as
 the MS Store version or a custom drive, pass it:
 `--stock "<sim folder>\Packages\asobo-vcockpits-instruments\html_ui\Pages\VCockpit\Instruments\Shared\BaseInstrument.js"`.
-`install-hook.mjs` finds the Community folder from the sim's `UserCfg.opt`; set `MSFS_COMMUNITY` to
-override it.
+`install-hook.mjs` looks for the Community folder in this order:
+1. `--community <folder>`, which it remembers in `%LOCALAPPDATA%\CockpitCast\hook.json`;
+2. the `MSFS_COMMUNITY` environment variable;
+3. the folder remembered from an earlier run;
+4. the sim's packages folder from `UserCfg.opt`;
+5. the default location.
+
+If none exists, it lists where it looked and exits with code 3.
 
 **Rebuild and reinstall the hook after every sim update**, because it contains a copy of a sim file.
 Only one Community package can replace that file, so the installer refuses if another package already

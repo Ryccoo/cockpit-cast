@@ -84,17 +84,39 @@ begin
   Result := ExpandConstant('{param:UPDATE|0}') = '1';
 end;
 
+// Runs hook\setup-hook.mjs with Extra arguments; its exit code (-1 if it could not start).
+function SetupHook(const Extra: String): Integer;
+begin
+  if not Exec(ExpandConstant('{app}\node\node.exe'), '"' + ExpandConstant('{app}\hook\setup-hook.mjs') + '"' + Extra,
+              ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Result) then
+    Result := -1;
+end;
+
 // The hook is built from the sim's own BaseInstrument.js, so it is made here, on this PC.
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Code: Integer;
+  Dir: String;
   Log: AnsiString;
 begin
   if (CurStep = ssPostInstall) and WizardIsTaskSelected('hook') then
   begin
     WizardForm.StatusLabel.Caption := 'Installing the Community hook into MSFS 2024...';
-    if not Exec(ExpandConstant('{app}\node\node.exe'), '"' + ExpandConstant('{app}\hook\setup-hook.mjs') + '"',
-                ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
+    Code := SetupHook('');
+    // 3: no Community folder found (moved add-ons, Addons Linker, ...). Ask for it; the hook remembers
+    // the answer, so later repairs and updates use it too. Not during silent updates.
+    Dir := '';
+    while (Code = 3) and not WizardSilent and
+          BrowseForFolder('MSFS 2024''s Community folder was not found. Choose the Community folder the sim ' +
+                          'loads add-ons from (for example E:\MSFS2024\Community). If you use Addons Linker ' +
+                          'or moved your add-ons, pick the folder the sim reads them from.', Dir, False) do
+    begin
+      // A trailing backslash would escape the closing quote ("E:\" as a drive root).
+      if (Dir <> '') and (Dir[Length(Dir)] = '\') then
+        Dir := Dir + '.';
+      Code := SetupHook(' --community "' + Dir + '"');
+    end;
+    if Code <> 0 then
     begin
       LoadStringFromFile(ExpandConstant('{localappdata}\CockpitCast\logs\hook-setup.log'), Log);
       MsgBox('The Community hook could not be installed:' + #13#10#13#10 + String(Log) + #13#10 +
