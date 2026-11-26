@@ -277,8 +277,8 @@ export class ClientServer {
         if (!isLoopback(c.addr)) this.send(c, { type: 'error', message: 'updates can be installed only from the sim PC' });
         else if (this.onInstallUpdate) this.onInstallUpdate().catch((e) => this.send(c, { type: 'error', message: `update failed: ${e.message}` }));
         break;
-      case 'setLocalScreens': // the editor's "Local screens" on/off (Screens tab)
-        this.onSetLocalScreens?.(!!msg.on);
+      case 'setLocalScreens': // the editor's Screens tab: on/off ("on") and the mode ("onTop")
+        this.onSetLocalScreens?.(msg);
         break;
       case 'setUpdateBeta': // the monitor's "beta versions" switch; pages on this PC only
         if (!isLoopback(c.addr)) this.send(c, { type: 'error', message: 'beta versions can be switched only on the sim PC' });

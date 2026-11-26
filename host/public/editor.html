@@ -203,6 +203,10 @@
     <span id="screensMsg" class="hint"></span>
     <span class="grow"></span>
     <button id="btnPreviewNow" title="What every screen shows right now">Preview now</button>
+    <select id="localMode" style="display:none;width:auto" title="Always on top: in front of everything, also the taskbar, not in Alt+Tab. Normal windows: in Alt+Tab and on the taskbar, like other windows. Either way: right-click a local screen to turn local screens off.">
+      <option value="top">Local screens: always on top</option>
+      <option value="normal">Local screens: normal windows</option>
+    </select>
     <button id="btnLocal" style="display:none" title="Show or hide all screens set to &quot;On this PC&quot; at once; their monitors and areas stay set">Local screens: on</button>
     <button id="btnAddScreen">Add screen</button>
     <select id="addAircraft" title="Give another aircraft its own choices"></select>
@@ -540,7 +544,7 @@ function connect() {
     if (m.type === 'layouts') onLayouts(m.layouts);
     else if (m.type === 'screens') {
       screens = m.screens;
-      if ('perAircraft' in m) { perAircraft = m.perAircraft || {}; knownAircraft = m.knownAircraft || []; loadedAircraft = m.aircraft || null; aircraftNames = m.aircraftNames || {}; localMonitors = m.localMonitors || []; localState = m.localState || 'none'; }
+      if ('perAircraft' in m) { perAircraft = m.perAircraft || {}; knownAircraft = m.knownAircraft || []; loadedAircraft = m.aircraft || null; aircraftNames = m.aircraftNames || {}; localMonitors = m.localMonitors || []; localState = m.localState || 'none'; localOnTop = m.localOnTop !== false; }
       if (!screensDirty) { screensDraft = null; aircraftDraft = null; }
       renderScreens();
       renderLayouts();
@@ -664,6 +668,7 @@ let screensDraft = null, screensDirty = false;
 let perAircraft = {}, aircraftDraft = null, knownAircraft = [], loadedAircraft = null, aircraftNames = {};
 let localMonitors = [];      // monitors of this PC, for "On this PC" (the host's local screen viewer)
 let localState = 'none';     // all local screens: 'none' (none set up), 'on' or 'off'
+let localOnTop = true;       // their mode: always on top, or normal windows
 let extraCols = [];          // aircraft columns added on this page that have no choices yet
 let apps = null;             // connected display apps (host 'apps' message, while this tab is shown)
 const acName = (a) => aircraftNames[a] || a;
@@ -822,6 +827,8 @@ function renderScreensToolbar() {
   lb.style.display = localState === 'none' ? 'none' : '';
   lb.textContent = localState === 'on' ? 'Local screens: on' : 'Local screens: off';
   lb.className = localState === 'on' ? 'primary' : '';
+  $('localMode').style.display = localState === 'none' ? 'none' : '';
+  $('localMode').value = localOnTop ? 'top' : 'normal';
   $('btnScreens').disabled = !screensDirty;
   $('btnScreensRevert').disabled = !screensDirty;
   $('screensDirty').textContent = screensDirty ? 'Unsaved changes' : '';
@@ -833,6 +840,7 @@ function renderScreensToolbar() {
   $('addAircraft').disabled = !rest.length;
 }
 $('btnLocal').onclick = () => send({ type: 'setLocalScreens', on: localState !== 'on' });
+$('localMode').onchange = () => send({ type: 'setLocalScreens', onTop: $('localMode').value === 'top' });
 $('addAircraft').onchange = () => { const a = $('addAircraft').value; if (a && !extraCols.includes(a)) extraCols.push(a); renderScreens(true); };
 
 // What a screen shows in the preview: the chosen aircraft's own choice, else its layout.

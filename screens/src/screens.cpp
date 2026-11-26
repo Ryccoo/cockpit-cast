@@ -5,12 +5,16 @@
 // so for example the PFD and the MFD can share one monitor side by side. A glass display is drawn straight
 // from the shared GPU textures cockpitcast-capture.dll fills inside the sim (capture/src/localshare.h):
 // no readback, no JPEG, no network.
-// The windows behave like other windows (in Alt+Tab and on the taskbar, "CockpitCast · <screen>"; whatever
-// was used last is in front), except that clicking one brings all local screens to the front without
-// taking the keyboard focus from the sim. Right-click: Turn local screens off / Open CockpitCast.
+// Two modes (per window, "onTop" in the windows command; the editor's Screens tab sets it for all):
+//   always on top (default)  not in Alt+Tab, in front of every other window and put back above the
+//                            taskbar every 2 s, so the taskbar does not cover a cockpit monitor;
+//   normal windows           in Alt+Tab and on the taskbar ("CockpitCast · <screen>"); whatever was used
+//                            last is in front; clicking one brings all local screens to the front.
+// Either way, clicking a screen never takes the keyboard focus from the sim, and right-click offers
+// Turn local screens off / Open CockpitCast (the way out when a screen covers what you need).
 //
 // Host -> viewer (stdin, one JSON object per line):
-//   {"type":"windows","windows":[{"id":"1","monitor":1,"area":"left","display":"pfd","fit":"contain","label":"PFD","note":null}]}
+//   {"type":"windows","windows":[{"id":"1","monitor":1,"area":"left","display":"pfd","fit":"contain","label":"PFD","note":null,"onTop":true}]}
 //     area: "full", "left", "right", "top", "bottom", or {"x":0,"y":0,"w":0.5,"h":1} (fractions of the monitor)
 //     display: the glass display to draw, or null (the window stays black)
 //     fit: "contain" (default; letterbox), "fill" (stretch), "cover" (crop to fill)
@@ -282,6 +286,7 @@ Opened* OpenEntry(int entry) {
 struct Screen {
     std::string id, display, fit = "contain", label, note;
     std::wstring drawnText;  // the waiting text last drawn
+    bool onTop = true;        // always on top (else a normal window); see the top of this file
     int monitor = 0;
     double ax = 0, ay = 0, aw = 1, ah = 1;  // area, fractions of the monitor
     HWND hwnd = nullptr;
@@ -318,10 +323,11 @@ void ReleaseDevice() {
         }
 }
 
-// All local screens to the front of the normal windows (not topmost), without activating them.
+// All local screens to the front, without activating them: normal windows in front of the other normal
+// windows; always-on-top ones above the other topmost windows, the taskbar included.
 void RaiseScreens() {
     for (auto& s : g_screens)
-        if (s->hwnd) SetWindowPos(s->hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if (s->hwnd) SetWindowPos(s->hwnd, s->onTop ? HWND_TOPMOST : HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
 LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
@@ -371,12 +377,14 @@ RECT AreaRect(const Screen& s) {
 void Place(Screen& s) {
     RECT r = AreaRect(s);
     if (!s.hwnd) {
-        // A normal window in Alt+Tab and on the taskbar (APPWINDOW: NOACTIVATE alone would hide it there).
-        s.hwnd = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_NOACTIVATE, kClass, L"CockpitCast screen", WS_POPUP, r.left, r.top, r.right - r.left, r.bottom - r.top,
+        // Always on top: a tool window (not in Alt+Tab) above everything. Normal: in Alt+Tab and on the
+        // taskbar (APPWINDOW: NOACTIVATE alone would hide it there).
+        DWORD ex = s.onTop ? WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST : WS_EX_APPWINDOW | WS_EX_NOACTIVATE;
+        s.hwnd = CreateWindowExW(ex, kClass, L"CockpitCast screen", WS_POPUP, r.left, r.top, r.right - r.left, r.bottom - r.top,
                                  nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
         ShowWindow(s.hwnd, SW_SHOWNOACTIVATE);
     } else {
-        SetWindowPos(s.hwnd, nullptr, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(s.hwnd, s.onTop ? HWND_TOPMOST : nullptr, r.left, r.top, r.right - r.left, r.bottom - r.top, (s.onTop ? 0 : SWP_NOZORDER) | SWP_NOACTIVATE);
     }
     s.dirty = true;
 }
@@ -608,6 +616,15 @@ void ApplyWindows(const JValue& list) {
             s->aw = std::clamp(a["w"].asDouble(1), 0.05, 1.0 - s->ax);
             s->ah = std::clamp(a["h"].asDouble(1), 0.05, 1.0 - s->ay);
         }
+        bool onTop = w["onTop"].asBool(true);
+        if (s->hwnd && onTop != s->onTop) {  // another mode: a new window with the other style
+            ReleaseChain(*s);
+            DestroyWindow(s->hwnd);
+            s->hwnd = nullptr;
+            s->drawnSeq = -1;
+            s->drawnText.clear();
+        }
+        s->onTop = onTop;
         s->display = w["display"].asString();
         s->fit = w["fit"].asString();
         s->label = w["label"].asString();
@@ -677,7 +694,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     }).detach();
 
     CreateDevice(nullptr);
-    uint64_t nextStats = GetTickCount64() + 5000;
+    uint64_t nextStats = GetTickCount64() + 5000, nextRaise = GetTickCount64() + 2000;
     for (;;) {
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -700,6 +717,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
             LogLine("graphics device lost; starting again");
             ReleaseDevice();
             g_devLuid = {};
+        }
+        // Always-on-top screens back above the taskbar (Windows puts it in front again from time to time).
+        if (GetTickCount64() >= nextRaise) {
+            nextRaise = GetTickCount64() + 2000;
+            for (auto& s : g_screens)
+                if (s->hwnd && s->onTop) SetWindowPos(s->hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
         if (GetTickCount64() >= nextStats) {
             nextStats = GetTickCount64() + 5000;

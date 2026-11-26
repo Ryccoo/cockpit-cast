@@ -9,7 +9,8 @@
 //
 // On/off for all local screens at once (tray menu "Show local screens", the editor's Screens tab), so the
 // screens' monitors and areas stay set: off closes the windows and stops the local copies in capture.dll.
-// Remembered in <dataDir>/local-screens.json.
+// Remembered in <dataDir>/local-screens.json, with the mode: always on top (default; covers the taskbar,
+// not in Alt+Tab) or normal windows (in Alt+Tab and on the taskbar).
 
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
@@ -33,8 +34,11 @@ export class LocalScreens extends EventEmitter {
     this.closing = false;
     this.file = path.join(cfg.dataDir, 'local-screens.json');
     this.enabled = true;
+    this.onTop = true;
     try {
-      this.enabled = JSON.parse(fs.readFileSync(this.file, 'utf8')).enabled !== false;
+      const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      this.enabled = saved.enabled !== false;
+      this.onTop = saved.onTop !== false;
     } catch {}
     this.lastState = '';
     screens.on('change', () => this.update());
@@ -48,14 +52,26 @@ export class LocalScreens extends EventEmitter {
 
   setEnabled(on) {
     this.enabled = !!on;
+    this.save();
+    log.info(`local screens ${this.enabled ? 'on' : 'off'}`);
+    this.update();
+  }
+
+  setOnTop(on) {
+    this.onTop = !!on;
+    this.save();
+    log.info(`local screens: ${this.onTop ? 'always on top' : 'normal windows'}`);
+    this.lastState = ''; // tell the editor
+    this.update();
+  }
+
+  save() {
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
-      fs.writeFileSync(this.file, JSON.stringify({ enabled: this.enabled }, null, 2) + '\n');
+      fs.writeFileSync(this.file, JSON.stringify({ enabled: this.enabled, onTop: this.onTop }, null, 2) + '\n');
     } catch (e) {
       log.warn(`cannot save ${this.file}: ${e.message}`);
     }
-    log.info(`local screens ${this.enabled ? 'on' : 'off'}`);
-    this.update();
   }
 
   start() {
@@ -112,6 +128,7 @@ export class LocalScreens extends EventEmitter {
         // Glass displays only for now; a steam layout leaves the window black, with a note.
         display: s.show?.kind === 'display' ? s.show.id : null,
         label: s.name,
+        onTop: this.onTop,
         note: s.show?.kind === 'layout' ? `Steam gauges (${this.layoutName?.(s.show.id) ?? s.show.id}) are not shown on this PC yet` : null,
       });
     }

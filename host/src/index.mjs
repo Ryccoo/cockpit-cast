@@ -52,6 +52,7 @@ const screens = new Screens({ cfg, sim, hook, registry, instruments });
 const localScreens = new LocalScreens({ cfg, screens, captureConfig });
 screens.localMonitors = () => localScreens.monitors;
 screens.localState = () => localScreens.state();
+screens.localOnTop = () => localScreens.onTop;
 localScreens.layoutName = (id) => layouts.list().find((l) => l.id === id)?.name ?? null;
 // For the editor's Insert window: displays by aircraft, with a saved picture of each.
 const catalog = new DisplayCatalog({ registry, instruments, hook, sim, hub, dataDir: cfg.dataDir });
@@ -114,7 +115,10 @@ const clients = new ClientServer({
   onDataWanted: (w) => dataSource.setDataWanted(w),
   onInstallUpdate: () => installUpdate(),
   onSetUpdateBeta: (on) => updater.setBeta(on),
-  onSetLocalScreens: (on) => localScreens.setEnabled(on),
+  onSetLocalScreens: (msg) => {
+    if (typeof msg.on === 'boolean') localScreens.setEnabled(msg.on);
+    if (typeof msg.onTop === 'boolean') localScreens.setOnTop(msg.onTop);
+  },
 });
 let latestGauge = null;
 dataSource.on('data', (values) => {
