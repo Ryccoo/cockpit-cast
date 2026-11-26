@@ -4,7 +4,10 @@
 // Each local screen is a borderless window on any part of any monitor (full, a half, or a custom area),
 // so for example the PFD and the MFD can share one monitor side by side. A glass display is drawn straight
 // from the shared GPU textures cockpitcast-capture.dll fills inside the sim (capture/src/localshare.h):
-// no readback, no JPEG, no network. The windows never take the focus from the sim.
+// no readback, no JPEG, no network.
+// The windows behave like other windows (in Alt+Tab and on the taskbar, "CockpitCast · <screen>"; whatever
+// was used last is in front), except that clicking one brings all local screens to the front without
+// taking the keyboard focus from the sim. Right-click: Turn local screens off / Open CockpitCast.
 //
 // Host -> viewer (stdin, one JSON object per line):
 //   {"type":"windows","windows":[{"id":"1","monitor":1,"area":"left","display":"pfd","fit":"contain","label":"PFD","note":null}]}
@@ -315,10 +318,17 @@ void ReleaseDevice() {
         }
 }
 
+// All local screens to the front of the normal windows (not topmost), without activating them.
+void RaiseScreens() {
+    for (auto& s : g_screens)
+        if (s->hwnd) SetWindowPos(s->hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
 LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_MOUSEACTIVATE:
-            return MA_NOACTIVATE;  // clicking a screen never takes the focus from the sim
+            RaiseScreens();        // a click brings the local screens to the front...
+            return MA_NOACTIVATE;  // ...without taking the keyboard focus from the sim
         case WM_RBUTTONUP: {  // the way out: turn local screens off, or open CockpitCast
             HMENU m = CreatePopupMenu();
             AppendMenuW(m, MF_STRING, 1, L"Turn local screens off");
@@ -361,9 +371,8 @@ RECT AreaRect(const Screen& s) {
 void Place(Screen& s) {
     RECT r = AreaRect(s);
     if (!s.hwnd) {
-        // Not topmost: on a dedicated monitor nothing covers it anyway, and any window brought forward
-        // (Alt+Tab, the CockpitCast window) still can, so a screen can never lock anyone out.
-        s.hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, kClass, L"CockpitCast screen", WS_POPUP, r.left, r.top, r.right - r.left, r.bottom - r.top,
+        // A normal window in Alt+Tab and on the taskbar (APPWINDOW: NOACTIVATE alone would hide it there).
+        s.hwnd = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_NOACTIVATE, kClass, L"CockpitCast screen", WS_POPUP, r.left, r.top, r.right - r.left, r.bottom - r.top,
                                  nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
         ShowWindow(s.hwnd, SW_SHOWNOACTIVATE);
     } else {
@@ -604,6 +613,7 @@ void ApplyWindows(const JValue& list) {
         s->label = w["label"].asString();
         s->note = w["note"].asString();
         Place(*s);
+        SetWindowTextW(s->hwnd, (L"CockpitCast \u00b7 " + Wide(s->label.empty() ? "Screen " + s->id : s->label)).c_str());
         next.push_back(std::move(s));
     }
     for (auto& old : g_screens)
