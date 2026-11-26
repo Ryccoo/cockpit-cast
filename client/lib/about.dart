@@ -1,7 +1,7 @@
 // About the app: version and links.
 
 /// This app's version. Keep it equal to the version in pubspec.yaml (the release build checks).
-const appVersion = '0.2.3';
+const appVersion = '0.2.4';
 
 /// Where to download the apps (for devices that cannot update themselves).
 const downloadUrl = 'https://cockpitcast.ludvigh.dev/#download';
