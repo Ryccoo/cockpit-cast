@@ -12,10 +12,15 @@
 //    readback buffer (3 per display). When the GPU is done (checked, never waited for), the encoder
 //    pool checks the marker again, skips unchanged pictures and sends JPEGs to the host.
 //
+// 5. Local screens (displays the host wants on this PC): copy the display's area into one of 3 shared
+//    GPU textures; once the copy has finished, publish it in shared memory for the local screen viewer
+//    (localshare.h). No readback and no JPEG for those.
+//
 // RunFrame runs from Present (or from ExecuteCommandLists if Present never comes), at most once per
 // call and never blocking: if another thread is in it, the call returns at once.
 
 #include "common.h"
+#include "localshare.h"
 
 #include <d3d12.h>
 
@@ -129,9 +134,30 @@ struct Display {
     bool wasEnabled = false;  // watched in the previous CONFIG
     uint64_t watchedSinceMs = 0;  // when it started being watched
     uint64_t idleSinceMs = 0;     // when it stopped being watched (0: watched)
+    // Local screens (localshare.h): shared textures, the entry in the shared block, next copy time.
+    struct ShareSlot {
+        ID3D12Resource* tex = nullptr;
+        HANDLE handle = nullptr;
+        uint64_t fence = 0;
+        bool copying = false;
+    } share[localshare::kSlots];
+    int shareEntry = -1;
+    UINT shareW = 0, shareH = 0;
+    DXGI_FORMAT shareFmt = DXGI_FORMAT_UNKNOWN;
+    double nextLocalSec = 0;
+    uint64_t localFrames = 0;
+    uint64_t localIdleSinceMs = 0;
 };
+
+// Watched by anyone: a client (JPEG) or the local screen viewer.
+bool Active(const DisplayConfig& c) { return (c.enabled && c.maxFps > 0) || (c.local && c.localFps > 0); }
 std::vector<std::unique_ptr<Display>> g_displays;  // never shrinks: slots may be in use by encoders
 CaptureConfig g_cfg;
+
+// Local screens (defined further down).
+bool OpenShare();
+void CloseShare();
+void ReleaseShare(Display& d);
 
 struct Cmd {
     ID3D12CommandAllocator* alloc = nullptr;
@@ -227,6 +253,8 @@ void ReleaseAll() {
                 s.buf = nullptr;
                 s.mapped = nullptr;
             }
+    for (auto& d : g_displays) ReleaseShare(*d);
+    CloseShare();
     for (Tracked& t : g_tracked) t.res->Release();
     g_tracked.clear();
     {
@@ -259,8 +287,9 @@ Display* FindDisplay(const std::string& id) {
 
 void ApplyConfig(const CaptureConfig& c) {
     for (auto& d : g_displays) {
-        d->wasEnabled = d->cfg.enabled;
+        d->wasEnabled = Active(d->cfg);
         d->cfg.enabled = false;
+        d->cfg.local = false;
     }
     for (const DisplayConfig& dc : c.displays) {
         Display* d = FindDisplay(dc.id);
@@ -294,7 +323,7 @@ void ApplyConfig(const CaptureConfig& c) {
         }
         bool moved = d->cfg.readX != dc.readX || d->cfg.readY != dc.readY || memcmp(d->cfg.marker, dc.marker, sizeof dc.marker) != 0;
         // Unwatched displays are not probed, so their mapping may be stale: look again when watched.
-        bool woke = dc.enabled && !d->wasEnabled;
+        bool woke = Active(dc) && !d->wasEnabled;
         if (woke) d->watchedSinceMs = NowMs();
         d->cfg = dc;
         if (moved || woke) {
@@ -397,7 +426,7 @@ void UpdateTracked(uint64_t now, uint64_t completed) {
 // Should this display be part of the next probe? Only watched ones: those not found yet, and (when
 // rechecking) those found. Unwatched displays cost nothing.
 bool WantsProbe(const Display& d, bool recheck) {
-    return d.cfg.enabled && d.cfg.maxFps > 0 && (!d.mapped || recheck);
+    return Active(d.cfg) && (!d.mapped || recheck);
 }
 
 // Record marker-pixel copies from every tracked texture for the displays that need it.
@@ -495,8 +524,228 @@ bool DisplayRegion(const Display& d, const D3D12_RESOURCE_DESC& desc, D3D12_BOX&
     return true;
 }
 
+// ---------------- local screens (localshare.h) ----------------
+HANDLE g_shareMap = nullptr;
+localshare::Header* g_share = nullptr;
+bool g_shareFailed = false;
+
+// The shared block, created on first use. Entries left by an earlier sim session are cleared.
+bool OpenShare() {
+    if (g_share) return true;
+    if (g_shareFailed || !g_device) return false;
+    g_shareMap = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(localshare::Header), localshare::kMapName);
+    if (!g_shareMap) {
+        Log("local screens: cannot create the shared memory block (error %lu)", GetLastError());
+        g_shareFailed = true;
+        return false;
+    }
+    g_share = static_cast<localshare::Header*>(MapViewOfFile(g_shareMap, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(localshare::Header)));
+    if (!g_share) {
+        Log("local screens: cannot map the shared memory block (error %lu)", GetLastError());
+        CloseHandle(g_shareMap);
+        g_shareMap = nullptr;
+        g_shareFailed = true;
+        return false;
+    }
+    g_share->magic = 0;  // half set up: the viewer waits
+    for (auto& e : g_share->displays) {
+        InterlockedExchange(&e.active, 0);
+        e.id[0] = 0;
+    }
+    LUID luid = g_device->GetAdapterLuid();
+    g_share->version = localshare::kVersion;
+    g_share->simPid = GetCurrentProcessId();
+    g_share->adapterLuidLow = luid.LowPart;
+    g_share->adapterLuidHigh = luid.HighPart;
+    InterlockedExchange(&g_share->heartbeat, long(GetTickCount()));
+    MemoryBarrier();
+    g_share->magic = localshare::kMagic;
+    Log("local screens: shared block ready");
+    return true;
+}
+
+void CloseShare() {
+    if (g_share) {
+        for (auto& e : g_share->displays) InterlockedExchange(&e.active, 0);
+        UnmapViewOfFile(g_share);
+        g_share = nullptr;
+    }
+    if (g_shareMap) CloseHandle(g_shareMap);
+    g_shareMap = nullptr;
+}
+
+void ReleaseShare(Display& d) {
+    for (auto& sh : d.share) {
+        if (sh.tex) sh.tex->Release();
+        if (sh.handle) CloseHandle(sh.handle);
+        sh = {};
+    }
+    d.shareW = d.shareH = 0;
+    d.shareFmt = DXGI_FORMAT_UNKNOWN;
+    if (g_share && d.shareEntry >= 0) InterlockedExchange(&g_share->displays[d.shareEntry].active, 0);
+}
+
+// The display's entry in the shared block (same id again, else a free one).
+int ShareEntry(Display& d) {
+    if (d.shareEntry >= 0 && strncmp(g_share->displays[d.shareEntry].id, d.id.c_str(), 31) == 0) return d.shareEntry;
+    int free = -1;
+    for (int i = 0; i < localshare::kMaxDisplays; ++i) {
+        const auto& e = g_share->displays[i];
+        if (strncmp(e.id, d.id.c_str(), 31) == 0) return d.shareEntry = i;
+        bool taken = false;
+        for (auto& other : g_displays) taken = taken || (other.get() != &d && other->shareEntry == i);
+        if (free < 0 && !taken && (!e.id[0] || !e.active)) free = i;
+    }
+    if (free < 0) return -1;
+    auto& e = g_share->displays[free];
+    InterlockedExchange(&e.active, 0);
+    strncpy_s(e.id, d.id.c_str(), _TRUNCATE);
+    InterlockedExchange(&e.latest, -1);
+    InterlockedExchange(&e.reading, -1);
+    return d.shareEntry = free;
+}
+
+// Shared textures of the display's size and format family; created again when either changes.
+bool EnsureShareTextures(Display& d, UINT w, UINT h, DXGI_FORMAT srcFormat) {
+    DXGI_FORMAT fmt = IsBgra(srcFormat) ? DXGI_FORMAT_B8G8R8A8_TYPELESS : DXGI_FORMAT_R8G8B8A8_TYPELESS;
+    if (d.share[0].tex && d.shareW == w && d.shareH == h && d.shareFmt == fmt) return true;
+    for (auto& sh : d.share)
+        if (sh.copying) return false;  // a copy into the old ones is in flight: next frame
+    int entry = ShareEntry(d);
+    if (entry < 0) return false;
+    ReleaseShare(d);
+    auto& e = g_share->displays[entry];
+    InterlockedExchange(&e.active, 0);  // the viewer lets go while the names change
+    long gen = e.gen + 1;
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = w;
+    rd.Height = h;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = fmt;
+    rd.SampleDesc.Count = 1;
+    rd.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
+    for (int k = 0; k < localshare::kSlots; ++k) {
+        auto& sh = d.share[k];
+        HRESULT hr = g_device->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&sh.tex));
+        if (FAILED(hr)) {
+            Log("local screens: %s: cannot create a %ux%u shared texture (0x%08lx)", d.id.c_str(), w, h, hr);
+            ReleaseShare(d);
+            return false;
+        }
+        swprintf_s(e.names[k], L"Local\\CockpitCast-%lu-%d-%ld-%d", GetCurrentProcessId(), entry, gen, k);
+        hr = g_device->CreateSharedHandle(sh.tex, nullptr, GENERIC_ALL, e.names[k], &sh.handle);
+        if (FAILED(hr)) {
+            Log("local screens: %s: cannot share the texture (0x%08lx)", d.id.c_str(), hr);
+            ReleaseShare(d);
+            return false;
+        }
+    }
+    d.shareW = w;
+    d.shareH = h;
+    d.shareFmt = fmt;
+    e.width = w;
+    e.height = h;
+    e.dxgiFormat = fmt;
+    InterlockedExchange(&e.latest, -1);
+    InterlockedExchange(&e.gen, gen);
+    InterlockedExchange(&e.active, 1);
+    Log("local screens: %s: %ux%u shared textures ready", d.id.c_str(), w, h);
+    return true;
+}
+
+// Copy each due local display into a free slot: not the newest (the viewer may be about to draw it),
+// not the one the viewer is drawing, not one still being copied.
+void RecordLocalCopies(ID3D12GraphicsCommandList* list, double nowSec, uint64_t nextFence, int& count) {
+    for (auto& dp : g_displays) {
+        Display& d = *dp;
+        if (!d.cfg.local || d.cfg.localFps <= 0 || !d.mapped || nowSec < d.nextLocalSec) continue;
+        const Tracked* t = FindTracked(d.mapped);
+        if (!t) continue;
+        D3D12_BOX box;
+        if (!DisplayRegion(d, t->desc, box)) continue;
+        if (!EnsureShareTextures(d, box.right - box.left, box.bottom - box.top, t->desc.Format)) continue;
+        auto& e = g_share->displays[d.shareEntry];
+        long latest = e.latest, reading = e.reading;
+        int k = -1;
+        for (int i = 0; i < localshare::kSlots && k < 0; ++i)
+            if (i != latest && i != reading && !d.share[i].copying) k = i;
+        if (k < 0) continue;  // the viewer holds the others: skip this frame
+        D3D12_TEXTURE_COPY_LOCATION dst{};
+        dst.pResource = d.share[k].tex;
+        dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        dst.SubresourceIndex = 0;
+        D3D12_TEXTURE_COPY_LOCATION src{};
+        src.pResource = d.mapped;
+        src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        src.SubresourceIndex = 0;
+        list->CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
+        d.share[k].copying = true;
+        d.share[k].fence = nextFence;
+        const_cast<Tracked*>(t)->lastUseFence = nextFence;
+        double interval = 1.0 / d.cfg.localFps;
+        d.nextLocalSec = std::max(d.nextLocalSec + interval, nowSec - interval * 0.5);
+        ++count;
+    }
+}
+
+// Finished copies become the newest frame of their display.
+void PublishLocalCopies(uint64_t completed) {
+    if (!g_share) return;
+    for (auto& dp : g_displays) {
+        Display& d = *dp;
+        if (d.shareEntry < 0) continue;
+        auto& e = g_share->displays[d.shareEntry];
+        // Newest finished copy wins if more than one completed since the last frame.
+        int newest = -1;
+        uint64_t newestFence = 0;
+        for (int k = 0; k < localshare::kSlots; ++k) {
+            auto& sh = d.share[k];
+            if (sh.copying && completed >= sh.fence) {
+                sh.copying = false;
+                if (sh.fence >= newestFence) {
+                    newest = k;
+                    newestFence = sh.fence;
+                }
+            }
+        }
+        if (newest >= 0) {
+            InterlockedExchange(&e.latest, newest);
+            InterlockedIncrement(&e.seq);
+            ++d.localFrames;
+        }
+    }
+}
+
+// Shared textures of displays no longer shown locally are freed after a while.
+void FreeIdleShares(uint64_t now) {
+    for (auto& dp : g_displays) {
+        Display& d = *dp;
+        if (d.cfg.local) {
+            d.localIdleSinceMs = 0;
+            continue;
+        }
+        if (!d.share[0].tex) continue;
+        if (!d.localIdleSinceMs) {
+            d.localIdleSinceMs = now;
+            if (g_share && d.shareEntry >= 0) InterlockedExchange(&g_share->displays[d.shareEntry].active, 0);
+            continue;
+        }
+        bool busy = false;
+        for (auto& sh : d.share) busy = busy || sh.copying;
+        if (busy || now - d.localIdleSinceMs < kFreeIdleMs) continue;
+        ReleaseShare(d);
+        LogFileOnly("local screens: %s: not shown locally; shared textures freed", d.id.c_str());
+    }
+}
+
 // Hand finished copies to the encoder; free slots the encoder is done with.
 void ServiceSlots(uint64_t completed, uint64_t now) {
+    PublishLocalCopies(completed);
     for (size_t di = 0; di < g_displays.size(); ++di) {
         Display& d = *g_displays[di];
         for (Slot& s : d.slots) {
@@ -598,6 +847,7 @@ bool RecordCaptures(ID3D12GraphicsCommandList* list, double nowSec, uint64_t nex
         d.submitted++;
         ++count;
     }
+    if (g_share) RecordLocalCopies(list, nowSec, nextFence, count);
     return true;
 }
 
@@ -606,7 +856,7 @@ void UpdateTrackRules(uint64_t now) {
     bool any = false, filter = true;
     std::vector<std::pair<uint64_t, UINT>> sizes;
     for (auto& d : g_displays) {
-        if (!d->cfg.enabled || d->cfg.maxFps <= 0) continue;
+        if (!Active(d->cfg)) continue;
         any = true;
         // Size unknown, or not found by size for a while (the hook's size may be off): all sizes.
         if (d->cfg.texW <= 0 || d->cfg.texH <= 0 || (!d->mapped && now - d->watchedSinceMs > kSizeTrustMs)) filter = false;
@@ -628,6 +878,7 @@ void UpdateTrackRules(uint64_t now) {
 
 // Readback buffers of displays nobody has watched for a while are freed (re-created when watched).
 void FreeIdleBuffers(uint64_t now) {
+    FreeIdleShares(now);
     for (auto& d : g_displays) {
         if (d->cfg.enabled) {
             d->idleSinceMs = 0;
@@ -686,9 +937,12 @@ void RunFrame() {
 
     if (g_shutdown) {
         bool busy = g_probePending;
-        for (auto& d : g_displays)
+        for (auto& d : g_displays) {
             for (Slot& s : d->slots)
                 if (s.state == Slot::Copying || (s.state == Slot::Encoding && !s.done)) busy = true;
+            for (auto& sh : d->share)
+                if (sh.copying) busy = true;
+        }
         for (Cmd& c : g_cmds)
             if (c.fence > completed) busy = true;
         if (!busy) ReleaseAll();
@@ -703,6 +957,11 @@ void RunFrame() {
     }
     if (!hostAlive) return;
 
+    bool wantLocal = false;
+    for (auto& d : g_displays) wantLocal = wantLocal || (d->cfg.local && d->cfg.localFps > 0);
+    if (wantLocal) OpenShare();
+    if (g_share) InterlockedExchange(&g_share->heartbeat, long(GetTickCount()));
+
     UpdateTracked(now, completed);
 
     bool anyMissing = false, anyFound = false;
@@ -714,8 +973,10 @@ void RunFrame() {
     bool wantProbe = !g_probePending && !g_tracked.empty() &&
                      ((anyMissing && (g_forceProbe ? now - g_lastProbeMs >= 250 : now - g_lastProbeMs >= kReprobeMs)) || recheck);
     bool anyDue = false;
-    for (auto& d : g_displays)
+    for (auto& d : g_displays) {
         if (d->cfg.enabled && d->mapped && nowSec >= d->nextCaptureSec) anyDue = true;
+        if (d->cfg.local && d->cfg.localFps > 0 && d->mapped && g_share && nowSec >= d->nextLocalSec) anyDue = true;
+    }
     if (!wantProbe && !anyDue) return;
 
     Cmd* cmd = nullptr;
@@ -868,9 +1129,10 @@ void StatsTick() {
         for (auto& d : g_displays) {
             char b[256];
             const Tracked* t = d->mapped ? FindTracked(d->mapped) : nullptr;
-            snprintf(b, sizeof b, "%s\"%s\":{\"enabled\":%s,\"fps\":%g,\"matched\":%s,\"texture\":\"%llux%u\",\"submitted\":%llu}", displays.empty() ? "" : ",",
-                     d->id.c_str(), d->cfg.enabled ? "true" : "false", d->cfg.maxFps, t ? "true" : "false", t ? (unsigned long long)t->desc.Width : 0ull,
-                     t ? t->desc.Height : 0u, (unsigned long long)d->submitted);
+            snprintf(b, sizeof b, "%s\"%s\":{\"enabled\":%s,\"fps\":%g,\"local\":%s,\"matched\":%s,\"texture\":\"%llux%u\",\"submitted\":%llu,\"localFrames\":%llu}",
+                     displays.empty() ? "" : ",", d->id.c_str(), d->cfg.enabled ? "true" : "false", d->cfg.maxFps, d->cfg.local ? "true" : "false",
+                     t ? "true" : "false", t ? (unsigned long long)t->desc.Width : 0ull, t ? t->desc.Height : 0u, (unsigned long long)d->submitted,
+                     (unsigned long long)d->localFrames);
             displays += b;
         }
         runFrames = g_runFrames;

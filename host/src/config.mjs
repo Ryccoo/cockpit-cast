@@ -52,6 +52,9 @@ const DEFAULTS = {
   // Tray icon on Windows (click: layout editor). Off when the program is not built or tray is false.
   tray: true,
   trayPath: fs.existsSync(path.join(ROOT, 'cockpitcast.exe')) ? path.join(ROOT, 'cockpitcast.exe') : built('tray', 'cockpitcast-tray.exe'),
+  // Local screens on the sim PC (localScreens.mjs): the viewer, and how often it gets a new picture.
+  screensPath: built('screens', 'cockpitcast-screens.exe'),
+  localFps: 60,
   // The DLL stops capturing (pass-through) when it hears nothing from the host for this long.
   heartbeatMs: 1000,
   heartbeatTimeoutMs: 10000,

@@ -252,12 +252,16 @@ void SetConfigFromJson(const std::string& json) {
         dc.texH = std::max(0, d["texture"]["h"].asInt(0));
         dc.enabled = d["enabled"].asBool(false);
         dc.maxFps = std::clamp(d["maxFps"].asDouble(0), 0.0, 60.0);
+        dc.local = d["local"].asBool(false);
+        dc.localFps = std::clamp(d["localFps"].asDouble(0), 0.0, 120.0);
         c.displays.push_back(dc);
     }
     std::string summary;
     for (auto& d : c.displays) {
         char b[128];
-        if (d.enabled) snprintf(b, sizeof b, "%s%s=%gfps", summary.empty() ? "" : " ", d.id.c_str(), d.maxFps);
+        if (d.enabled || d.local)
+            snprintf(b, sizeof b, "%s%s=%gfps%s", summary.empty() ? "" : " ", d.id.c_str(), d.enabled ? d.maxFps : 0.0,
+                     d.local ? (std::string("+local@") + std::to_string(int(d.localFps))).c_str() : "");
         else snprintf(b, sizeof b, "%s%s=off", summary.empty() ? "" : " ", d.id.c_str());
         summary += b;
     }

@@ -39,6 +39,7 @@
   .sctable .sc { position: sticky; left: 0; background: var(--panel); z-index: 1; min-width: 210px; }
   .sctable td.custom { box-shadow: inset 3px 0 0 var(--accent); }
   .sctable label.f { grid-template-columns: 48px 1fr; }
+  .sctable label.f.local { grid-template-columns: 78px 1fr; margin-top: 8px; }
   .sctable .an { overflow-wrap: anywhere; }
   .sctable .row { margin-top: 6px; }
   .sctable .nowrap { flex-wrap: nowrap; margin-top: 0; }
@@ -538,7 +539,7 @@ function connect() {
     if (m.type === 'layouts') onLayouts(m.layouts);
     else if (m.type === 'screens') {
       screens = m.screens;
-      if ('perAircraft' in m) { perAircraft = m.perAircraft || {}; knownAircraft = m.knownAircraft || []; loadedAircraft = m.aircraft || null; aircraftNames = m.aircraftNames || {}; }
+      if ('perAircraft' in m) { perAircraft = m.perAircraft || {}; knownAircraft = m.knownAircraft || []; loadedAircraft = m.aircraft || null; aircraftNames = m.aircraftNames || {}; localMonitors = m.localMonitors || []; }
       if (!screensDirty) { screensDraft = null; aircraftDraft = null; }
       renderScreens();
       renderLayouts();
@@ -660,6 +661,7 @@ function armButton(btn, armedText, action) {
 // screen can show one layout or one glass display whenever that aircraft is loaded.
 let screensDraft = null, screensDirty = false;
 let perAircraft = {}, aircraftDraft = null, knownAircraft = [], loadedAircraft = null, aircraftNames = {};
+let localMonitors = [];      // monitors of this PC, for "On this PC" (the host's local screen viewer)
 let extraCols = [];          // aircraft columns added on this page that have no choices yet
 let previewAircraft = '';    // whose choices the preview shows ('' = all aircraft)
 let apps = null;             // connected display apps (host 'apps' message, while this tab is shown)
@@ -697,7 +699,7 @@ function defaultText(d) {
 // force: redraw even while a field in the table has the focus (our own handlers). Updates from the host
 // then only refresh the status lines, so typing a name or an open list is not interrupted.
 function renderScreens(force) {
-  if (!screensDraft) screensDraft = screens.map((s) => ({ id: s.id, name: s.name, glass: s.glass, steam: s.steam }));
+  if (!screensDraft) screensDraft = screens.map((s) => ({ id: s.id, name: s.name, glass: s.glass, steam: s.steam, local: s.local ? { ...s.local } : null }));
   if (!aircraftDraft) aircraftDraft = clone(perAircraft);
   renderScreensToolbar();
   if (document.body.dataset.tab !== 'screens') return;
@@ -720,7 +722,8 @@ function renderScreens(force) {
     const steamOpts = ['', ...layouts.map((l) => l.id)].map((id) => opt(id, id ? lname(id) : '(nothing)', d.steam ?? '')).join('');
     h += `<tr><td class="sc"><div class="row nowrap"><input data-i="${i}" data-k="name" value="${esc(d.name)}" title="Screen name">
         <button class="icon danger" data-del="${i}" title="Remove this screen" ${screensDraft.length <= 1 ? 'disabled' : ''}>×</button></div>
-        <div class="sub">id <b>${esc(d.id)}</b> · <span data-status="${esc(d.id)}">${statusText(d.id)}</span></div></td>
+        <div class="sub">id <b>${esc(d.id)}</b> · <span data-status="${esc(d.id)}">${statusText(d.id)}</span></div>
+        ${localControls(d, i)}</td>
       <td><label class="f" title="For glass cockpits">Glass <select data-i="${i}" data-k="glass">${glassOpts}</select></label>
         <label class="f" title="For aircraft without glass displays">Layout <select data-i="${i}" data-k="steam">${steamOpts}</select></label></td>`;
     for (const a of cols) {
@@ -756,6 +759,13 @@ function renderScreens(force) {
     screensChanged();
     renderScreens(true);
   };
+  for (const el of $('scTable').querySelectorAll('[data-local]')) el.onchange = () => {
+    const d = screensDraft[el.dataset.i];
+    if (el.dataset.local === 'monitor') d.local = el.value === '' ? null : { monitor: +el.value, area: d.local?.area ?? 'full', fit: d.local?.fit ?? 'contain' };
+    else if (d.local) d.local.area = el.value;
+    screensChanged();
+    renderScreens(true);
+  };
   for (const b of $('scTable').querySelectorAll('[data-del]')) b.onclick = () => { screensDraft.splice(+b.dataset.del, 1); screensChanged(); renderScreens(true); };
   for (const b of $('scTable').querySelectorAll('[data-prev]')) b.onclick = () => { previewAircraft = b.dataset.prev; $('preview').classList.add('open'); renderPreview(); updateSubs(); };
   for (const b of $('scTable').querySelectorAll('[data-clear]')) b.onclick = () => {
@@ -771,6 +781,21 @@ function renderScreens(force) {
     renderScreens(true);
   };
 }
+// "On this PC": the sim PC shows this screen itself, in a borderless window on (part of) a monitor,
+// straight from the GPU (no display app needed). Two screens can share a monitor (left and right half).
+function localControls(d, i) {
+  const opt = (v, text, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(text)}</option>`;
+  const mon = d.local ? String(d.local.monitor) : '';
+  const known = localMonitors.some((m) => String(m.index) === mon);
+  const monitors = opt('', 'Off', mon) + localMonitors.map((m) => opt(String(m.index), `Monitor ${m.index + 1} \u00b7 ${m.w}\u00d7${m.h}${m.primary ? ' \u00b7 main' : ''}`, mon))
+    + (mon && !known ? opt(mon, `Monitor ${+mon + 1} (not connected)`, mon) : '');
+  const area = d.local?.area ?? 'full';
+  const areas = [['full', 'Whole monitor'], ['left', 'Left half'], ['right', 'Right half'], ['top', 'Top half'], ['bottom', 'Bottom half']].map(([v, t]) => opt(v, t, area)).join('');
+  if (!localMonitors.length && !d.local) return '<div class="sub" title="Needs the host on Windows, with its local screen viewer">On this PC: not available</div>';
+  return `<label class="f local" title="Show this screen on this PC (the sim PC), in a borderless window: no display app needed">On this PC <select data-i="${i}" data-local="monitor">${monitors}</select></label>`
+    + (d.local ? `<label class="f local" title="Part of the monitor: two screens can share one (left and right half)">Area <select data-i="${i}" data-local="area">${areas}</select></label>` : '');
+}
+
 // Toolbar: save state, and the aircraft that can get a column.
 function renderScreensToolbar() {
   $('btnScreens').disabled = !screensDirty;

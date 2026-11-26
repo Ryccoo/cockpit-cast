@@ -17,7 +17,9 @@ export class CaptureLink extends EventEmitter {
     this.heartbeatMs = heartbeatMs;
     this.sources = new Set(); // { sock, hello, stats, connectedAt, frames, unchanged }
     captureConfig.on('change', (cfg) => {
-      const summary = cfg.displays.map((d) => `${d.id}:${d.enabled ? `${d.maxFps}fps` : 'off'}${d.crop ? ` crop ${d.crop.w}x${d.crop.h}@${d.read.x},${d.read.y}` : ''}`).join(' ');
+      const summary = cfg.displays
+        .map((d) => `${d.id}:${d.enabled ? `${d.maxFps}fps` : d.local ? 'local only' : 'off'}${d.enabled && d.local ? '+local' : ''}${d.crop ? ` crop ${d.crop.w}x${d.crop.h}@${d.read.x},${d.read.y}` : ''}`)
+        .join(' ');
       if (this.sources.size) log.info(`config -> source: ${summary}`);
       for (const s of this.sources) this.write(s, encodePipeJson(MSG.CONFIG, cfg));
     });

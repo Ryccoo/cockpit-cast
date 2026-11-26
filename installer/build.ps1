@@ -50,7 +50,7 @@ function Run($exe, [string[]]$argList, $dir = $root) {
 
 # ---- builds ----
 if (-not $SkipBuild) {
-  foreach ($p in 'capture', 'injector', 'tray') {
+  foreach ($p in 'capture', 'injector', 'tray', 'screens') {
     if (-not (Test-Path "$root\$p\build")) { Run $cmake @('-S', $p, '-B', "$p/build", '-G', $generator, '-A', 'x64') }
     Run $cmake @('--build', "$p/build", '--config', 'Release')
   }
@@ -66,7 +66,7 @@ if (-not $SkipHost) {
   if (Test-Path $h) { Remove-Item -Recurse -Force $h }
   New-Item -ItemType Directory -Force "$h\bin", "$h\node", "$h\host", "$h\config", "$h\hook\src" | Out-Null
   Copy-Item "$root\tray\build\Release\cockpitcast-tray.exe" "$h\cockpitcast.exe"
-  Copy-Item "$root\capture\build\Release\cockpitcast-capture.dll", "$root\injector\build\Release\cockpitcast-injector.exe" "$h\bin"
+  Copy-Item "$root\capture\build\Release\cockpitcast-capture.dll", "$root\injector\build\Release\cockpitcast-injector.exe", "$root\screens\build\Release\cockpitcast-screens.exe" "$h\bin"
   Copy-Item $node "$h\node\node.exe"
   $nodeLicense = Join-Path (Split-Path $node) 'LICENSE'
   if (Test-Path $nodeLicense) { Copy-Item $nodeLicense "$h\node\LICENSE" }

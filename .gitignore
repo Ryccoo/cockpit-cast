@@ -7,6 +7,7 @@ client/build/
 client/.dart_tool/
 capture/build/
 tray/build/
+screens/build/
 
 # Private notes for this PC (not published)
 CLAUDE.md

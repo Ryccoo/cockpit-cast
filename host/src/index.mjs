@@ -28,6 +28,7 @@ import { advertise } from './discovery.mjs';
 import { Tray } from './tray.mjs';
 import { Updater } from './updater.mjs';
 import { HookSetup, isElevated } from './hookSetup.mjs';
+import { LocalScreens } from './localScreens.mjs';
 import { logToConsole, logToFile, makeLog } from './log.mjs';
 
 const cfg = loadConfig();
@@ -47,6 +48,9 @@ const injector = new Injector({ cfg, sim, capture });
 const layouts = new LayoutStore(cfg.dataDir);
 const instruments = new InstrumentLog({ dataDir: cfg.dataDir, sim, hook, registry });
 const screens = new Screens({ cfg, sim, hook, registry, instruments });
+// Screens set to "On this PC": borderless windows of the local screen viewer, fed straight from the GPU.
+const localScreens = new LocalScreens({ cfg, screens, captureConfig });
+screens.localMonitors = () => localScreens.monitors;
 // For the editor's Insert window: displays by aircraft, with a saved picture of each.
 const catalog = new DisplayCatalog({ registry, instruments, hook, sim, hub, dataDir: cfg.dataDir });
 registry.on('change', () => {
@@ -81,6 +85,7 @@ const getDetail = () => ({
   hookLayouts: hook.detail(),
   captureConfig: captureConfig.current,
   screens: screens.list(),
+  localScreens: localScreens.status(),
   gaugeData: {
     source: cfg.fakeData ? 'fake' : 'simconnect',
     frames: sim.dataCount,
@@ -115,6 +120,7 @@ dataSource.on('data', (values) => {
 });
 layouts.on('change', (l) => clients.broadcastLayouts(l));
 screens.on('change', (s) => clients.broadcastScreens(s));
+localScreens.on('monitors', () => clients.broadcastScreens(screens.list()));
 clients.addUpgrade('/hook', hook.wss);
 clients.addApi('GET', '/api/instruments', () => instruments.report());
 clients.addApi('GET', '/api/displays', () => ({ displays: registry.all(), present: [...hook.present()] }));
@@ -230,6 +236,7 @@ tray.on('quit', shutdown);
 tray.on('update', () => installUpdate().catch((e) => log.warn(`update failed: ${e.message}`)));
 if (cfg.tray || Tray.parented) tray.start();
 updater.start();
+localScreens.start();
 
 // Install the newer version: download and check it, tell the client apps to update themselves too,
 // then hand over to the installer, which restarts CockpitCast when done (see updater.mjs).
@@ -264,6 +271,7 @@ function appsLine({ apps, paused }) {
 async function shutdown() {
   log.info('shutting down');
   updater.close();
+  localScreens.close();
   tray.close();
   injector.close();
   screens.close();

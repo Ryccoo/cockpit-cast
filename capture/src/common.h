@@ -38,6 +38,9 @@ struct DisplayConfig {
     int texW = 0, texH = 0;     // 0 = unknown
     bool enabled = false;
     double maxFps = 0;  // may be below 1 (e.g. 0.2: one picture every 5 s for previews)
+    // Shown on this PC by the local screen viewer: shared GPU textures instead of JPEGs (localshare.h).
+    bool local = false;
+    double localFps = 0;
 };
 
 struct CaptureConfig {

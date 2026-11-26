@@ -142,7 +142,7 @@ export class Screens extends EventEmitter {
       if (own[s.id]) show = { ...own[s.id] };
       else if (pick[i]) show = { kind: 'display', id: pick[i] };
       else if (this.mode !== 'waiting' && s.steam) show = { kind: 'layout', id: s.steam };
-      return { id: s.id, name: s.name, mode: this.mode, show, custom: !!own[s.id], glass: s.glass ?? null, steam: s.steam ?? null };
+      return { id: s.id, name: s.name, mode: this.mode, show, custom: !!own[s.id], glass: s.glass ?? null, steam: s.steam ?? null, local: s.local ?? null };
     });
   }
 
@@ -155,7 +155,7 @@ export class Screens extends EventEmitter {
     for (const name of Object.keys(this.instruments?.byAircraft ?? {})) known.add(name);
     for (const d of this.registry.all()) for (const name of d.aircraft ?? []) known.add(name);
     if (aircraft) known.add(aircraft);
-    return { aircraft, perAircraft: this.perAircraft, knownAircraft: [...known].sort(), aircraftNames: this.names };
+    return { aircraft, perAircraft: this.perAircraft, knownAircraft: [...known].sort(), aircraftNames: this.names, localMonitors: this.localMonitors?.() ?? [] };
   }
 
   /// Replace the screen list (from the editor): any number of screens, each with an id (what a client
@@ -169,7 +169,7 @@ export class Screens extends EventEmitter {
     this.assignments = next;
     this.perAircraft = cleanPerAircraft(perAircraft === undefined ? this.perAircraft : perAircraft, next);
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const saved = { screens: this.assignments.map(({ id, name, glass, steam }) => ({ id, name, glass, steam })), aircraft: this.perAircraft };
+    const saved = { screens: this.assignments.map(({ id, name, glass, steam, local }) => ({ id, name, glass, steam, local })), aircraft: this.perAircraft };
     fs.writeFileSync(this.file, JSON.stringify(saved, null, 2));
     log.info(`screens: ${this.assignments.map((a) => `${a.id}=${a.glass ?? '-'}/${a.steam ?? '-'}`).join(' ')}`);
     for (const [a, m] of Object.entries(this.perAircraft)) log.info(`  ${a}: ${Object.entries(m).map(([sid, o]) => `${sid}=${o.kind} ${o.id}`).join(' ')}`);
@@ -194,7 +194,12 @@ function cleanScreen(s) {
   const id = String(s?.id ?? '').trim();
   if (!/^[A-Za-z0-9_-]{1,32}$/.test(id)) throw new Error(`screen id '${id}' must be 1-32 chars: letters, digits, - or _`);
   const str = (v) => (v === null || v === undefined || v === '' ? null : String(v).slice(0, 64));
-  return { id, name: String(s.name ?? `Screen ${id}`).slice(0, 60), glass: str(s.glass), steam: str(s.steam) };
+  // Shown on this PC by the local screen viewer (localScreens.mjs): a monitor and an area of it.
+  const l = s.local;
+  const local = l && Number.isInteger(l.monitor) && l.monitor >= 0 && l.monitor < 16
+    ? { monitor: l.monitor, area: ['full', 'left', 'right', 'top', 'bottom'].includes(l.area) ? l.area : 'full', fit: ['contain', 'fill', 'cover'].includes(l.fit) ? l.fit : 'contain' }
+    : null;
+  return { id, name: String(s.name ?? `Screen ${id}`).slice(0, 60), glass: str(s.glass), steam: str(s.steam), local };
 }
 
 // Per-aircraft choices, keeping only screens that exist and well-formed entries.
