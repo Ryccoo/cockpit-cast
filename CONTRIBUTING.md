@@ -3,7 +3,7 @@
 Thanks for helping. Issues and pull requests are welcome.
 
 - **Reporting a bug:** say what you expected and what happened, and attach the logs: in the CockpitCast
-  window, **Help > Logs** makes a zip for a bug report (the display app: **Settings > Logs**).
+  window, **Help > Logs** has a command that zips them for a bug report (the display app: **Settings > Logs**).
 - **Changing code:** read [AGENTS.md](AGENTS.md). It holds the project's rules, the code style and how to
   test, for people and coding agents alike. [docs/development.md](docs/development.md) shows how to run and
   test every part without the sim.

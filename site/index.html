@@ -44,7 +44,7 @@
   section { padding: 64px 0; border-top: 1px solid var(--line); }
   h2 { font-size: clamp(26px, 3.5vw, 36px); margin: 0 0 10px; }
   .sub { color: var(--muted); margin: 0 0 32px; max-width: 760px; }
-  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
   .card h3 { margin: 0 0 6px; font-size: 18px; }
   .card p { margin: 0; color: var(--muted); font-size: 15px; }
@@ -96,6 +96,7 @@
     <div class="links">
       <a href="#features">Features</a>
       <a href="#how">How it works</a>
+      <a href="guides.html">Guides</a>
       <a href="#download">Download</a>
       <a href="#support">Support</a>
       <a href="https://github.com/Ryccoo/cockpit-cast">GitHub</a>
@@ -107,7 +108,7 @@
   <div class="wrap">
     <div class="eyebrow">For Microsoft Flight Simulator 2024 home cockpits</div>
     <h1>Your sim's cockpit displays, on real screens.</h1>
-    <p class="lead">CockpitCast streams the glass displays of MSFS 2024 (PFD, MFD, radios, CDU and more) straight from the sim to PCs and Raspberry Pis on your network, and draws classic steam gauges from live sim data. No pop-outs. No window capture.</p>
+    <p class="lead">CockpitCast puts the glass displays of MSFS 2024 (PFD, MFD, radios, CDU and more) on extra monitors: on the sim PC itself, or on PCs, Raspberry Pis and tablets on your network. It draws classic steam gauges from live sim data. No pop-outs. No window capture.</p>
     <div class="buttons">
       <a class="btn primary" href="#download">Download for Windows</a>
       <a class="btn" href="https://github.com/Ryccoo/cockpit-cast">View on GitHub</a>
@@ -126,7 +127,8 @@
       <div class="card"><div class="ic">🔀</div><h3>Glass or steam, by itself</h3><p>Load a glass cockpit and your screens show its PFD and MFD. Load a steam-gauge aircraft and they switch to gauge layouts within seconds.</p></div>
       <div class="card"><div class="ic">🧠</div><h3>Learns every aircraft</h3><p>Every display the sim draws becomes available the first time you fly an aircraft: G1000, G3000, airliner screens, radio and autopilot readouts, even the hour meter.</p></div>
       <div class="card"><div class="ic">🧩</div><h3>Mix glass and steam</h3><p>Design layouts in the browser: put a cropped piece of any display, like just the ADF frequency, right next to steam gauges.</p></div>
-      <div class="card"><div class="ic">📡</div><h3>Any screen on your network</h3><p>Old mini PCs and Raspberry Pis. Clients find the sim PC by themselves, start full screen and need no keyboard.</p></div>
+      <div class="card"><div class="ic">⚡</div><h3>One PC is enough</h3><p>Monitors on the sim PC show screens with only the host installed: no extra app, no network, straight from the graphics card. Two screens can share one monitor, side by side.</p></div>
+      <div class="card"><div class="ic">📡</div><h3>Or any screen on your network</h3><p>Old mini PCs and Raspberry Pis. The display app finds the sim PC by itself, starts full screen and needs no keyboard.</p></div>
       <div class="card"><div class="ic">🪶</div><h3>Light on the sim</h3><p>Only what your screens show is captured. Nothing watched means nothing captured, and the sim's memory is left alone.</p></div>
       <div class="card"><div class="ic">🔄</div><h3>Updates itself</h3><p>One click on the sim PC installs a new version there and on every Windows display PC. No new installers to download.</p></div>
       <div class="card"><div class="ic">✈️</div><h3>Per-aircraft screens</h3><p>Give any aircraft its own layout on any screen, like a TBM panel on screen 2. The rest keep switching by themselves.</p></div>
@@ -153,7 +155,7 @@
       <img src="images/editor-insert.png" alt="The layout editor's Insert window listing displays by aircraft, with live previews" loading="lazy" width="1600" height="1000">
       <div>
         <h3>A layout editor that remembers every aircraft</h3>
-        <p>The editor runs in your browser on the sim PC. Its Insert window shows the displays of the aircraft you are flying, live, and every display you have flown before, grouped by aircraft.</p>
+        <p>The editor is part of the CockpitCast window on the sim PC. Its Insert window shows the displays of the aircraft you are flying, live, and every display you have flown before, grouped by aircraft.</p>
         <p>Pick a display, drag a box around the part you want, and save. Every screen using that layout updates at once.</p>
       </div>
     </div>
@@ -163,11 +165,24 @@
 <section id="how">
   <div class="wrap">
     <h2>How it works</h2>
-    <p class="sub">Three pieces, all installed in a few minutes.</p>
+    <p class="sub">Installed in a few minutes. Step-by-step: the <a href="guides.html">guides</a>.</p>
     <div class="steps">
       <div class="step"><h3>Install the host on the sim PC</h3><p>It sits in the tray, builds a small Community package for MSFS from your own install, and captures the displays your screens need.</p></div>
-      <div class="step"><h3>Install the client on each display device</h3><p>Pick "Screen 1", "Screen 2"… once. It finds the host on your network by itself.</p></div>
-      <div class="step"><h3>Fly</h3><p>Screens show glass displays or steam gauges depending on the aircraft. Fine-tune anything in the editor.</p></div>
+      <div class="step"><h3>Choose where each screen goes</h3><p><b>A monitor on the sim PC:</b> pick it under <i>On this PC</i> in the Screens section. Nothing else to install. <b>Another device:</b> install the display app there and pick "Screen 1", "Screen 2"… once.</p></div>
+      <div class="step"><h3>Fly</h3><p>Screens show glass displays or steam gauges depending on the aircraft. Fine-tune anything in the CockpitCast window.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="split">
+      <img src="images/window-screens.png" alt="The Screens section of the CockpitCast window: screen 1 on monitor 2 of the sim PC, with a different layout for the loaded aircraft" loading="lazy" width="1400" height="560">
+      <div>
+        <h3>Everything in one window</h3>
+        <p>Status, screens, layouts, the sim add-on, help and settings in one window, opened from the tray icon. A status bar shows at a glance whether the sim, the add-on and the capture are working.</p>
+        <p>Each screen goes to a monitor on the sim PC or to a display device, and any aircraft can have its own choices. <a href="guides.html#screens">How to set up screens</a>.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -181,10 +196,10 @@
       <tbody>
         <tr><td><b>Sim PC</b><br><span class="small">Windows 10/11 x64, MSFS 2024</span></td>
             <td><a class="btn primary" href="https://github.com/Ryccoo/cockpit-cast/releases/latest/download/CockpitCast-Host-Setup.exe">Host installer</a></td>
-            <td class="small">Close MSFS while installing: setup also installs the Community hook. No admin rights needed.</td></tr>
+            <td class="small">All you need for screens on the sim PC's own monitors. Close MSFS while installing: setup also installs the Community hook. No admin rights needed.</td></tr>
         <tr><td><b>Display PC</b><br><span class="small">Windows 10/11 x64</span></td>
             <td><a class="btn" href="https://github.com/Ryccoo/cockpit-cast/releases/latest/download/CockpitCast-Client-Setup.exe">Client installer</a><br><br><a class="small" href="https://github.com/Ryccoo/cockpit-cast/releases/latest/download/CockpitCast-Client-windows.zip">or portable zip</a></td>
-            <td class="small">Includes everything it needs. The zip runs without installing.</td></tr>
+            <td class="small">Only for screens on another computer. Includes everything it needs. The zip runs without installing.</td></tr>
         <tr><td><b>Linux PC</b><br><span class="small">x64</span></td>
             <td><a class="btn" href="https://github.com/Ryccoo/cockpit-cast/releases/latest/download/CockpitCast-Client-linux-x64.tar.gz">Client for Linux</a></td>
             <td class="small">Unpack and run <code>cockpitcast</code>. Needs GTK 3.</td></tr>

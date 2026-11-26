@@ -1,14 +1,19 @@
 # CockpitCast
 
 **Put your sim's cockpit displays on real screens.** CockpitCast streams the glass displays of
-Microsoft Flight Simulator 2024 (for example the G1000 PFD and MFD) from the sim PC to small monitors
-driven by another device on your network: a mini PC or a Raspberry Pi. For aircraft
-with classic round dials it draws the steam gauges itself, from live sim data.
+Microsoft Flight Simulator 2024 (for example the G1000 PFD and MFD) to small monitors: monitors on the
+sim PC itself, or driven by another device on your network (a mini PC, a Raspberry Pi, a tablet). For
+aircraft with classic round dials it draws the steam gauges itself, from live sim data.
+
+**Guides** (setting up screens, local screens, layouts, per-aircraft screens):
+[cockpitcast.ludvigh.dev/guides](https://cockpitcast.ludvigh.dev/guides.html).
 
 - **No pop-out windows.** The displays come straight out of the sim's own rendering, so you do not
   have to pop panels out, move windows around or give up a monitor on the sim PC.
 - **Glass or steam, picked by itself.** In a glass cockpit the screens show the displays. In a
   steam-gauge aircraft they show gauge layouts you design in a web editor.
+- **One PC is enough.** Monitors on the sim PC show screens with just the host installed: no display
+  app, no network, straight from the graphics card.
 - **No keyboard on the display box.** The client finds the host on the network by itself, can start
   at sign-in in full screen, and shows whatever the host assigns to its screen.
 - **One-way and read-only.** Nothing is sent back to the sim.
@@ -31,6 +36,8 @@ me a coffee on Ko-fi. It helps keep it working after every sim update.
 | ![G1000 PFD and MFD in the client app](docs/images/glass-pfd-mfd.jpg) | ![Six-pack layout](docs/images/steam-six-pack.png) |
 | **Both in one layout:** the G1000 engine strip next to steam gauges | **Learned by itself:** every A310 display, on first load |
 | ![G1000 engine strip next to steam gauges](docs/images/mixed-g1000-engine-strip.png) | ![A310 displays captured](docs/images/a310-displays.jpg) |
+| **The CockpitCast window:** what every screen shows, at a glance | **Screens:** per screen and per aircraft, on this PC or a device |
+| ![Status](docs/images/window-status.png) | ![Screens](docs/images/window-screens.png) |
 
 **[More screenshots](docs/screenshots.md):** the TBM 930 and 737 MAX, the layout editor and its Insert window, the
 former monitor page (now the window's Status and Help).
@@ -89,7 +96,16 @@ Android and iOS apps are planned for later (app stores).
 
 ## Install (Windows)
 
-Download from [cockpitcast.ludvigh.dev](https://cockpitcast.ludvigh.dev) or the [Releases page](https://github.com/Ryccoo/cockpit-cast/releases/latest):
+Download from [cockpitcast.ludvigh.dev](https://cockpitcast.ludvigh.dev) or the [Releases page](https://github.com/Ryccoo/cockpit-cast/releases/latest).
+
+**Which parts do you need?**
+
+| Your screens are on... | Install |
+|---|---|
+| **Monitors connected to the sim PC** | Only the **host** on the sim PC. Set each screen's *On this PC* in the CockpitCast window's **Screens** section ([Local screens](#local-screens-displays-on-the-sim-pc-itself)). |
+| **Another PC, a Raspberry Pi or a tablet** | The **host** on the sim PC, and the **display app** (client) on each of those devices. |
+| Both | Both: each screen goes to the sim PC's monitors or to a device. |
+
 
 - **Sim PC:** `CockpitCast-Host-<version>-Setup.exe`. It installs the host for your Windows user (no admin
   rights needed), with its own copy of Node.js, so there is nothing else to install. Close MSFS first:
@@ -111,7 +127,7 @@ on another drive, linked into the sim's Community folder), choose the Community 
 options, not the library: MSFS does not read the library. CockpitCast remembers the folder, so repairs
 after sim updates use it too.
 
-The editor's **Sim add-on** tab shows where the hook is installed, its version, and whether the sim is
+The CockpitCast window's **Sim add-on** section shows where the hook is installed, its version, and whether the sim is
 running it. Its **Reinstall hook** button rebuilds the hook from your sim's files, the same as **Repair
 Community hook** in the Start menu. Use it after every MSFS update. It works only on the sim PC, with
 MSFS closed.
@@ -293,7 +309,10 @@ cockpitcast --layout six-pack               show this gauge layout
 
 ## Layouts: steam gauges and glass displays together
 
-Open `http://<sim PC>:8800/editor` in a browser. It is also linked from the monitor page.
+Open the CockpitCast window (the tray icon, or `http://<sim PC>:8800/` in a browser on another computer).
+
+![The Layouts section: the six-pack layout](docs/images/window-layouts.png)
+
 
 - **Layouts.** Place, resize and configure items. **Insert gauge or display…** opens a window listing
   everything you can add, with live previews:
@@ -326,9 +345,12 @@ aircraft profiles in `host/defaults/aircraft.json` and are estimated when an air
 
 ## Local screens (displays on the sim PC itself)
 
-Monitors connected to the sim PC can show screens without the display app: in the editor's **Screens**
-tab, set a screen's **On this PC** to a monitor and its **Area** to the whole monitor or a half (left,
-right, top, bottom). Each screen is a borderless window, so for example the PFD on the left half and
+Monitors connected to the sim PC can show screens **with only the host installed**, no display app: in
+the CockpitCast window's **Screens** section, set a screen's **On this PC** to a monitor and its **Area**
+to the whole monitor or a half (left, right, top, bottom).
+
+![The Screens section: screen 1 on monitor 2, whole monitor](docs/images/window-screens.png)
+ Each screen is a borderless window, so for example the PFD on the left half and
 the MFD on the right half of one small monitor. The host's viewer (`cockpitcast-screens.exe`) draws
 glass displays straight from the sim's graphics memory: capture.dll copies each display into shared GPU
 textures, with no JPEG, no network and no second app on the graphics card's busy path.
@@ -358,7 +380,7 @@ fly more aircraft. Nothing needs rebuilding, and nobody has to collect aircraft 
   choice is not in the cockpit. So a G3X or G3000 aircraft works on screens set up for the G1000.
 - **Other displays**, such as GPS units and radios, appear only on a screen they are assigned to. For
   example, put a GPS on screen 3, and it shows in every aircraft that has it, glass or steam.
-- **Monitor page, under "Instruments in this cockpit".** Lists everything the loaded aircraft draws.
+- **Screens, under "Glass displays in this cockpit".** Lists everything the loaded aircraft draws.
   Here you can add a smaller instrument by hand, mark a display as primary or not, or forget one.
 - **The editor and the client Settings page** list all known displays, so you can pick any of them for a
   screen or window.

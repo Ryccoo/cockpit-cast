@@ -1295,7 +1295,7 @@ function renderPreview() {
     const { layout, what } = previewContent(s);
     const card = document.createElement('div');
     card.className = 'card';
-    const note = s.custom && loadedAircraft ? ` \u00b7 ${acName(loadedAircraft)}'s own choice` : '';
+    const note = s.custom && loadedAircraft ? ' \u00b7 chosen for this aircraft' : '';
     const unsaved = layout && layout === draft && dirty ? ' (unsaved)' : '';
     card.innerHTML = `<div class="t"><b>${esc(s.name || 'Screen ' + s.id)}</b> \u00b7 ${esc(what + unsaved + note)}</div>`;
     const box = document.createElement('div');

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guides: CockpitCast</title>
+<meta name="description" content="How to set up CockpitCast: what to install, screens on the sim PC's own monitors, display devices, gauge layouts, per-aircraft screens and sim updates.">
+<meta property="og:title" content="CockpitCast guides">
+<meta property="og:description" content="Set up MSFS 2024 cockpit displays on real screens, step by step.">
+<meta property="og:image" content="https://cockpitcast.ludvigh.dev/images/window-status.png">
+<meta property="og:url" content="https://cockpitcast.ludvigh.dev/guides.html">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23181a1e' stroke='%232ecc71' stroke-width='4'/%3E%3Cpath d='M16 17.5 23.5 9' stroke='%23f0b429' stroke-width='3.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='17.5' r='2.6' fill='%23e6e6e6'/%3E%3C/svg%3E">
+<style>
+  :root { --bg: #0d1117; --panel: #161b22; --panel2: #1c2230; --line: #2a3140; --text: #e6edf3; --muted: #9aa4b2; --accent: #2ecc71; --amber: #f0b429; --cyan: #4cc9f0; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--cyan); }
+  img { max-width: 100%; height: auto; display: block; }
+  nav { position: sticky; top: 0; z-index: 10; background: #0d1117e6; backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; gap: 20px; height: 56px; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+  nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); text-decoration: none; }
+  nav .links { margin-left: auto; display: flex; gap: 18px; }
+  nav .links a { color: var(--muted); text-decoration: none; font-size: 15px; }
+  nav .links a:hover, nav .links a.on { color: var(--text); }
+  .gauge { width: 26px; height: 26px; }
+  .layout { max-width: 1120px; margin: 0 auto; padding: 0 20px; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px; }
+  aside.toc { position: sticky; top: 76px; align-self: start; padding: 32px 0; font-size: 14px; }
+  aside.toc b { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  aside.toc a { display: block; color: var(--muted); text-decoration: none; padding: 5px 10px; border-left: 2px solid var(--line); }
+  aside.toc a:hover { color: var(--text); border-left-color: var(--accent); }
+  main { padding: 32px 0 80px; min-width: 0; }
+  h1 { font-size: clamp(30px, 4vw, 44px); line-height: 1.15; margin: 0 0 10px; }
+  .lead { color: var(--muted); font-size: 18px; margin: 0 0 8px; }
+  section { padding: 36px 0 8px; border-top: 1px solid var(--line); margin-top: 32px; scroll-margin-top: 64px; }
+  h2 { font-size: 26px; margin: 0 0 6px; }
+  h3 { font-size: 18px; margin: 22px 0 6px; }
+  p, li { color: #cfd6de; }
+  .sub { color: var(--muted); margin: 0 0 14px; }
+  ol, ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  b { color: var(--text); }
+  code, kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 14px; }
+  .ui { color: var(--text); font-weight: 600; white-space: nowrap; }
+  figure { margin: 18px 0 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  figcaption { padding: 10px 14px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
+  .tip { background: #142019; border: 1px solid #245c3a; border-radius: 10px; padding: 12px 16px; margin: 16px 0; color: #cfe9d8; font-size: 15px; }
+  .tip b { color: #8ce0ad; }
+  .warn { background: #241d10; border-color: #6b5320; color: #ecdcb8; }
+  .warn b { color: var(--amber); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 14px 0; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 15px; }
+  th { color: var(--muted); font-weight: 600; font-size: 14px; background: var(--panel2); }
+  tr:last-child td { border-bottom: 0; }
+  .btn { display: inline-block; padding: 10px 16px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid var(--accent); background: var(--accent); color: #06210f; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 60px; color: var(--muted); font-size: 14px; }
+  footer .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    aside.toc { position: static; padding: 20px 0 0; }
+    nav .links a:not(.on) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="./">
+      <svg class="gauge" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="#181a1e" stroke="#2ecc71" stroke-width="4"/><path d="M16 17.5 23.5 9" stroke="#f0b429" stroke-width="3.5" stroke-linecap="round"/><circle cx="16" cy="17.5" r="2.6" fill="#e6e6e6"/></svg>
+      CockpitCast
+    </a>
+    <div class="links">
+      <a href="./#features">Features</a>
+      <a href="./#download">Download</a>
+      <a class="on" href="guides.html">Guides</a>
+      <a href="https://github.com/Ryccoo/cockpit-cast">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <b>Guides</b>
+    <a href="#parts">What to install</a>
+    <a href="#first">Install and first flight</a>
+    <a href="#window">The CockpitCast window</a>
+    <a href="#screens">Screens</a>
+    <a href="#local">Screens on the sim PC</a>
+    <a href="#devices">Display devices</a>
+    <a href="#layouts">Steam gauge layouts</a>
+    <a href="#aircraft">Per-aircraft screens</a>
+    <a href="#updates">Sim updates and the add-on</a>
+    <a href="#cockpitcast-updates">CockpitCast updates</a>
+    <a href="#help">Problems</a>
+  </aside>
+
+  <main>
+    <h1>Guides</h1>
+    <p class="lead">From install to a cockpit that switches by itself between aircraft.</p>
+
+    <section id="parts">
+      <h2>What to install</h2>
+      <p class="sub">It depends on where your cockpit screens are.</p>
+      <table>
+        <thead><tr><th>Your screens are on...</th><th>Install</th></tr></thead>
+        <tbody>
+          <tr><td><b>Monitors connected to the sim PC</b></td><td>Only the <b>host</b> on the sim PC. Nothing else: screens are drawn straight from the graphics card. See <a href="#local">Screens on the sim PC</a>.</td></tr>
+          <tr><td><b>Another PC, a Raspberry Pi or a tablet</b></td><td>The <b>host</b> on the sim PC, and the <b>display app</b> on each of those devices. See <a href="#devices">Display devices</a>.</td></tr>
+          <tr><td><b>Both</b></td><td>Both. Each screen goes either to a monitor on the sim PC or to a device.</td></tr>
+        </tbody>
+      </table>
+      <p><a class="btn" href="./#download">Downloads</a></p>
+    </section>
+
+    <section id="first">
+      <h2>Install and first flight</h2>
+      <ol>
+        <li><b>Close MSFS.</b> Setup installs a small add-on (the <i>hook</i>) into the sim's Community folder, and the sim reads add-ons only when it starts.</li>
+        <li>Run <code>CockpitCast-Host-Setup.exe</code> on the sim PC. No admin rights needed: start it normally, not "as administrator".</li>
+        <li>On the <span class="ui">MSFS Community folder</span> page, check the folder. Setup fills in the one it found. With <b>MSFS Addons Linker</b>, choose the Community folder from its options (where it puts the links), not your add-ons library.</li>
+        <li>Finish with <span class="ui">Start CockpitCast now</span> ticked. The CockpitCast window opens, and an icon appears in the tray (under the <kbd>^</kbd> arrow at first: drag it onto the taskbar to keep it visible).</li>
+        <li>Start MSFS and load a flight. About 10 seconds after the flight is live, CockpitCast starts capturing.</li>
+      </ol>
+      <div class="tip"><b>Antivirus warning?</b> CockpitCast is not code-signed yet, and its capture module loads into the sim, which antivirus programs watch closely. A check like AVG's CyberCapture is not a finding: let it finish.</div>
+    </section>
+
+    <section id="window">
+      <h2>The CockpitCast window</h2>
+      <p>Open it from the tray icon (click it, or right-click > <span class="ui">Open CockpitCast</span>), or start CockpitCast from the Start menu. The status bar at the bottom always shows the version, the sim, the add-on, the capture and the display apps.</p>
+      <figure><img src="images/window-status.png" alt="The Status section: the loaded aircraft, the add-on, capture, display apps and screens on this PC, and what each screen shows" width="1400" height="880" loading="lazy"><figcaption><b>Status</b>: the flight, the four steps to your screens (click one for its section), and what each screen shows right now.</figcaption></figure>
+      <ul>
+        <li><b>Status</b>: what is going on, and anything that needs fixing.</li>
+        <li><b>Screens</b>: what each screen shows, where, and per aircraft.</li>
+        <li><b>Layouts</b>: design steam gauge layouts.</li>
+        <li><b>Sim add-on</b>: the hook in the Community folder; reinstall it after sim updates.</li>
+        <li><b>Help</b>: fixes for common problems, logs, the connected display apps.</li>
+        <li><b>Settings</b>: updates, beta versions, start with Windows.</li>
+      </ul>
+    </section>
+
+    <section id="screens">
+      <h2>Screens</h2>
+      <p class="sub">A screen is one place in your cockpit that shows something: a monitor, half a monitor, a tablet.</p>
+      <figure><img src="images/window-screens.png" alt="The Screens section: two screens, the All aircraft column and a column for the loaded aircraft" width="1400" height="560" loading="lazy"><figcaption>Each row is a screen. <b>All aircraft</b> is the normal rule; an aircraft's column overrides it for that aircraft.</figcaption></figure>
+      <ol>
+        <li>Open <span class="ui">Screens</span>. You start with Screen 1 and Screen 2. <span class="ui">Add screen</span> adds more; name them as you like ("Left", "Engine panel").</li>
+        <li>In <span class="ui">All aircraft</span>, pick for each screen:
+          <ul>
+            <li><b>Glass</b>: the display it shows in glass cockpits. <i>Automatic</i> takes the cockpit's own displays in order, PFD first, so G1000, G3000 and airliner screens work without setup.</li>
+            <li><b>Layout</b>: the steam gauge layout it shows in aircraft with round dials.</li>
+          </ul>
+        </li>
+        <li>Choose where the screen appears: a monitor of the sim PC (<a href="#local">On this PC</a>), or a <a href="#devices">display device</a>.</li>
+        <li>Press <span class="ui">Save</span>.</li>
+      </ol>
+      <p>From then on, screens switch by themselves: load a glass aircraft and they show its displays; load a steam aircraft and they show your layouts within seconds.</p>
+      <p><b>Glass displays in this cockpit</b>, under the table, lists what the loaded aircraft draws. Mark a display as <i>primary</i> to make Automatic use it, or add a smaller instrument (a radio, the hour meter) as a display.</p>
+    </section>
+
+    <section id="local">
+      <h2>Screens on the sim PC</h2>
+      <p class="sub">For monitors connected to the sim PC. Only the host is needed: no display app, no network.</p>
+      <ol>
+        <li>In <span class="ui">Screens</span>, set the screen's <span class="ui">On this PC</span> to a monitor.</li>
+        <li>Pick the <span class="ui">Area</span>: the whole monitor, or a half (left, right, top, bottom). Put the PFD on the left half and the MFD on the right half to share one small monitor.</li>
+        <li>Press <span class="ui">Save</span>. The screen appears straight away, as a borderless window.</li>
+      </ol>
+      <p>Glass displays are drawn straight from the graphics card: no compression, no delay. Steam gauge layouts are drawn with live sim data.</p>
+      <ul>
+        <li><span class="ui">Local screens: on/off</span> (Screens, or <span class="ui">Show local screens</span> in the tray menu) turns them all on or off, keeping their monitors.</li>
+        <li><span class="ui">Local screens: always on top</span> keeps them in front of everything, also the taskbar. <span class="ui">normal windows</span> makes them behave like other windows, in Alt+Tab.</li>
+        <li><b>Right-click</b> a local screen for <span class="ui">Turn local screens off</span> or <span class="ui">Open CockpitCast</span>. Clicking a screen never takes the keyboard from the sim.</li>
+      </ul>
+      <div class="tip"><b>Tip:</b> in Windows Settings > Personalization > Taskbar > Taskbar behaviors, turn off <i>Show my taskbar on all displays</i>, so the taskbar stays off your cockpit monitors. The monitors must be on the same graphics card as the sim.</div>
+      <div class="tip warn"><b>Careful with the main monitor:</b> a screen set to your main monitor covers it. Right-click the screen to turn local screens off.</div>
+    </section>
+
+    <section id="devices">
+      <h2>Display devices</h2>
+      <p class="sub">A mini PC, a Raspberry Pi or a tablet next to your cockpit monitors, on the same network as the sim PC.</p>
+      <ol>
+        <li>Install the display app: <code>CockpitCast-Client-Setup.exe</code> on Windows, or the Linux and Raspberry Pi downloads.</li>
+        <li>Start it. On its <span class="ui">Settings</span> page:
+          <ul>
+            <li><span class="ui">Host</span>: leave it on <i>Find automatically</i>. It finds the sim PC by itself (or type the sim PC's address).</li>
+            <li><span class="ui">Windows on this device</span>: one window per monitor; pick the monitor and which screen it shows (<i>Screen 1</i>, <i>Screen 2</i>...), and full screen.</li>
+            <li><span class="ui">Startup</span>: <i>Start when I sign in</i> and <i>Open the windows straight away</i>, for a box without a keyboard.</li>
+          </ul>
+        </li>
+        <li>Press <span class="ui">Save and start</span>. Tap or click a display to get back to Settings.</li>
+      </ol>
+      <p>The first time, allow CockpitCast through the Windows firewall on <b>private</b> networks on the sim PC. <span class="ui">Help</span> in the CockpitCast window lists the connected display apps; <span class="ui">Identify</span> shows an app's name on its screen.</p>
+    </section>
+
+    <section id="layouts">
+      <h2>Steam gauge layouts</h2>
+      <p class="sub">What screens show in aircraft with round dials: a six-pack, an engine panel, or a mix with parts of glass displays.</p>
+      <figure><img src="images/window-layouts.png" alt="The Layouts section with the six-pack layout open" width="1400" height="880" loading="lazy"><figcaption><b>Layouts</b>: the list on the left, the layout in the middle, its settings on the right.</figcaption></figure>
+      <ol>
+        <li>Open <span class="ui">Layouts</span> and press <span class="ui">New</span> (or <span class="ui">Duplicate</span> an existing one).</li>
+        <li>Set its <span class="ui">Size</span> to your screen's shape: 1280 × 720 for 16:9, 1024 × 768 for 4:3. The layout is scaled to fit each screen.</li>
+        <li>Press <span class="ui">Insert gauge or display…</span> and pick a gauge: airspeed, attitude, altimeter, turn coordinator, heading, vertical speed, VOR/ILS, ADF, clock, or a <i>dial</i> for engine and fuel values (presets for RPM, oil, fuel and more).</li>
+        <li>Drag gauges to move them; drag the corner to resize. Click one to edit it on the right: for a dial, its value, range, <i>Numbers every</i>, <i>Ticks every</i> and colour arcs.</li>
+        <li>Press <span class="ui">Save</span> (or Ctrl+S). Every screen using the layout updates at once.</li>
+        <li>In <span class="ui">Screens</span>, pick the layout for a screen.</li>
+      </ol>
+      <figure><img src="images/editor-insert.png" alt="The Insert window: glass displays by aircraft with live previews, and steam gauges" width="1600" height="1000" loading="lazy"><figcaption>The Insert window: every display seen on this PC, by aircraft, and every gauge.</figcaption></figure>
+      <h3>A piece of a glass display</h3>
+      <p>Insert a glass display, then drag a box on its picture in the settings on the right to keep only part of it, like the ADF frequency or the G1000 engine strip, next to your steam gauges.</p>
+      <p><span class="ui">Demo</span> animates the gauges with a built-in flight, so you can design without the sim running; <span class="ui">Live data</span> uses the sim.</p>
+    </section>
+
+    <section id="aircraft">
+      <h2>Per-aircraft screens</h2>
+      <p class="sub">Give one aircraft its own choices, like a TBM 930 panel on screen 2, while the others keep the normal rules.</p>
+      <ol>
+        <li>In <span class="ui">Screens</span>, the aircraft you are flying always has a column (marked <i>loaded now</i>). For another aircraft you have flown, choose it in <span class="ui">Set up another aircraft…</span>.</li>
+        <li>In that aircraft's column, pick a layout or glass display for any screen. Cells left on <i>Same as all aircraft</i> follow the normal rules.</li>
+        <li>Press <span class="ui">Save</span>. Whenever that aircraft is loaded, its screens show your choice straight away.</li>
+      </ol>
+      <p><span class="ui">Reset</span> clears the loaded aircraft's choices; <span class="ui">Remove</span> removes another aircraft's column. <span class="ui">Status</span> shows what each screen shows in the loaded aircraft, marked <i>chosen for this aircraft</i>.</p>
+    </section>
+
+    <section id="updates">
+      <h2>Sim updates and the add-on</h2>
+      <p>The hook holds a copy of one sim file, so <b>after every MSFS update, reinstall it</b>: close MSFS, open <span class="ui">Sim add-on</span>, press <span class="ui">Reinstall hook</span>. CockpitCast warns in the status bar when the hook is outdated or not detected.</p>
+      <ul>
+        <li><b>Community folder elsewhere</b> (another drive, MS Store version, Addons Linker): enter it in <span class="ui">Sim add-on</span> and press <span class="ui">Save</span>. CockpitCast then always uses that folder and never switches to another one by itself.</li>
+        <li><b>Reinstall does not work?</b> At the bottom of <span class="ui">Sim add-on</span>: a ready-made command, or <i>Build the hook</i> and copy it into the Community folder yourself.</li>
+      </ul>
+    </section>
+
+    <section id="cockpitcast-updates">
+      <h2>CockpitCast updates</h2>
+      <p>CockpitCast checks for new versions by itself. When one is out, the status bar says so; <span class="ui">Settings</span> > <span class="ui">Install and restart</span> updates the sim PC and every Windows display PC with the installed display app. <span class="ui">Beta versions</span> in Settings also offers test versions before a release.</p>
+    </section>
+
+    <section id="help">
+      <h2>Problems</h2>
+      <p><span class="ui">Help</span> in the CockpitCast window has fixes for the common ones: glass displays not appearing, which Community folder MSFS uses, antivirus warnings, a screen covering what you need.</p>
+      <p>For anything else, open an <a href="https://github.com/Ryccoo/cockpit-cast/issues">issue on GitHub</a> and attach the logs: <span class="ui">Help</span> > <span class="ui">Logs</span> has a command that zips them, with Windows' crash records, onto your desktop.</p>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>CockpitCast · free software under the <a href="https://github.com/Ryccoo/cockpit-cast/blob/main/LICENSE">GPL-3.0</a> · <a href="https://github.com/Ryccoo/cockpit-cast">source on GitHub</a> · <a href="https://ko-fi.com/richardludvigh">support it on Ko-fi</a></span>
+    <span>Microsoft Flight Simulator is a trademark of Microsoft Corporation. Not affiliated with Microsoft or Asobo Studio.</span>
+  </div>
+</footer>
+</body>
+</html>
