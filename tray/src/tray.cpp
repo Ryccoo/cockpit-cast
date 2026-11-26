@@ -364,17 +364,16 @@ void Notify(const wchar_t* title, const std::wstring& text, DWORD flags = NIIF_W
 
 void ShowMenu(int x, int y) {
   HMENU m = CreatePopupMenu();
-  AppendMenuW(m, MF_STRING, CMD_EDITOR, L"Open layout editor");
-  AppendMenuW(m, MF_STRING, CMD_MONITOR, L"Open monitor");
-  AppendMenuW(m, MF_STRING, CMD_LOGS, L"Open logs folder");
+  // Short: everything else (status, help, logs, settings) is in the CockpitCast window.
+  AppendMenuW(m, MF_STRING, CMD_EDITOR, L"Open CockpitCast");
   if (g_local == L"on" || g_local == L"off")
     AppendMenuW(m, MF_STRING | (g_local == L"on" ? MF_CHECKED : MF_UNCHECKED), CMD_LOCAL, L"Show local screens");
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
   for (const auto& line : Lines(g_status)) AppendMenuW(m, MF_STRING | MF_GRAYED, 0, line.c_str());
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
   if (!g_update.empty()) AppendMenuW(m, MF_STRING, CMD_UPDATE, (L"Install update " + g_update + L" and restart").c_str());
-  if (!g_support.empty()) AppendMenuW(m, MF_STRING, CMD_SUPPORT, L"Support CockpitCast \u2665 (Ko-fi)");
-  AppendMenuW(m, MF_STRING, CMD_QUIT, L"Quit CockpitCast host");
+  if (!g_support.empty()) AppendMenuW(m, MF_STRING, CMD_SUPPORT, L"Support CockpitCast \u2665");
+  AppendMenuW(m, MF_STRING, CMD_QUIT, L"Quit CockpitCast");
   SetMenuDefaultItem(m, CMD_EDITOR, FALSE);
   SetForegroundWindow(g_wnd); // so the menu closes when clicking elsewhere
   UINT cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, x, y, 0, g_wnd, nullptr);

@@ -33,7 +33,7 @@ me a coffee on Ko-fi. It helps keep it working after every sim update.
 | ![G1000 engine strip next to steam gauges](docs/images/mixed-g1000-engine-strip.png) | ![A310 displays captured](docs/images/a310-displays.jpg) |
 
 **[More screenshots](docs/screenshots.md):** the TBM 930 and 737 MAX, the layout editor and its Insert window, the
-monitor page.
+former monitor page (now the window's Status and Help).
 
 ## How it works
 
@@ -46,7 +46,7 @@ monitor page.
  │ SimConnect ── flight state, gauge data ──────────────────┼─┤
  │                                                         │ ▼
  │ Host (Node.js) ── JPEG frames + gauge data + layouts ────┼───────► Client app (Flutter)
- │   web: monitor page, layout editor                      │ WebSocket  Windows / Linux / Pi /
+ │   web: the CockpitCast window (status, screens, layouts) │ WebSocket  Windows / Linux / Pi /
  └─────────────────────────────────────────────────────────┘ + mDNS     macOS / Android
 ```
 
@@ -65,7 +65,8 @@ monitor page.
    - serves frames, gauge data and layouts to the clients over WebSocket;
    - advertises itself on the network with mDNS.
 
-   It also has two web pages: a debug monitor and the layout editor.
+   Its window (a web page, shown by the tray in a window of its own) has the status, screens, layouts,
+   the sim add-on, help and settings.
 4. **Client app** (`client/`, Flutter). It shows glass displays and draws the steam gauges at up to
    60 fps, with interpolation between data samples. It can run several windows, one per monitor.
 
@@ -132,7 +133,7 @@ Installed copies update themselves; there is no need to download a new installer
   off, set `"updates": false` in `host/config.json` (or `COCKPITCAST_UPDATES=0`). Copies built from
   source show that a new release exists but do not install it.
 - **Beta versions** (for testers): test versions published before a release. Nobody gets them unless
-  they switch them on: *beta versions* next to the version on the monitor page (on the sim PC), and
+  they switch them on: *Beta versions* in the CockpitCast window's Settings (on the sim PC), and
   *Settings > Updates > Get beta versions* in the display app. A beta updates to the final release by
   itself.
 
@@ -189,23 +190,23 @@ npm start
 ```
 
 On first start, allow Node.js through the Windows firewall on **private** networks, or other devices will
-not reach it. Open `http://localhost:8800/` for the monitor page.
+not reach it. Open `http://localhost:8800/` for the CockpitCast window.
 
 While the host runs, its icon (a small round gauge) sits in the system tray:
 
-- **Click** it to open the layout editor; **right-click** for the monitor, the current state and *Quit*.
+- **Click** it to open the CockpitCast window; **right-click** for the current state, *Show local screens*
+  and *Quit*. Starting CockpitCast from the Start menu opens the window too (at sign-in: tray icon only).
 - **Ring colour:** grey = host running, blue = sim running, green = glass displays being captured.
   Hover for details.
 - Windows 11 puts new tray icons under the **^** arrow at first. To keep it visible, drag it onto the
   taskbar, or turn it on in *Settings > Personalization > Taskbar > Other system tray icons*.
-- The tooltip says **Streaming** (only what client screens show is captured) or **Setup** (an editor or
-  monitor page is open and visible, so previews are captured too). It switches by itself: a hidden or
-  minimised editor or monitor tab costs the sim nothing.
+- The menu says what is captured: only what screens show, plus previews while the CockpitCast window
+  is open and visible. A hidden or minimised window costs the sim nothing.
 - The icon closes when the host stops. It needs `tray/build` (step 1); without it the host runs as
   before, with no icon.
 
 Start the sim and load a flight. About 10 seconds after the flight is live, the host loads capture.dll
-into the sim, once per sim session. The monitor page then shows the displays.
+into the sim, once per sim session. The window's Status then shows the displays.
 
 ### 4. Run a client
 
@@ -317,8 +318,8 @@ Open `http://<sim PC>:8800/editor` in a browser. It is also linked from the moni
     is loaded, those screens show it straight away; cells left on *Same as all aircraft* keep the
     normal rules. The loaded aircraft always has a column; *Set up another aircraft* adds any aircraft
     you have flown. Aircraft show their names from the sim (once they have been loaded).
-- **Preview all screens** (`/editor#preview`) shows every screen at once; on the Screens tab, each
-  column's *Preview* shows them with that aircraft's choices. `/editor#screens` opens the Screens tab.
+- **Status** shows what every screen shows right now (live glass displays, layouts), from the saved
+  settings for the loaded aircraft; *Preview* in Screens goes there.
 
 Airspeed arcs come from the sim (stall speeds, Vne). The sim has no values for Vfe and Vno: these come from
 aircraft profiles in `host/defaults/aircraft.json` and are estimated when an aircraft is not listed.
@@ -375,17 +376,16 @@ keys. For example:
 
 | Page or API | What |
 |---|---|
-| `http://localhost:8800/` | Monitor: live displays, sim, capture, instruments, and the connected display apps (Identify shows an app's name on its screen; Pause stops sending to it, so nothing is captured for it, until Resume), and **Troubleshooting**: fixes for common problems with ready-made PowerShell commands, such as installing the hook by hand into a given Community folder (`/#trouble`, `/#trouble-hook`) |
-| `http://localhost:8800/editor` | Layout and screen editor |
+| `http://localhost:8800/` | The CockpitCast window (also from the tray icon): **Status** (sim, hook, capture, display apps, what each screen shows), **Screens**, **Layouts**, **Sim add-on** (the hook: folder, Save, Reinstall, installing it by hand), **Help** (fixes for common problems, logs, diagnostics: display apps with Identify and Pause, the instruments in the cockpit) and **Settings** (version and updates, beta versions, start with Windows). A status bar at the bottom shows the version, CockpitCast, the sim, the hook, capture and display apps in every section. Sections: `/#status`, `/#screens`, `/#layouts`, `/#addon`, `/#help`, `/#settings` |
 | `http://localhost:8800/api/status` | Full state as JSON (sim PC only) |
 | `POST /api/inject` | Inject capture.dll now (when `autoInject` is off) |
 
 - **Logs:** `%LOCALAPPDATA%\CockpitCast\logs\`: `host.log`, `capture.log`, `hook-setup.log`,
   `update-install.log`, and the display app's `client.log` (extra windows: `client-window2.log` ...)
-  when it runs on this PC. The previous run's are kept as `*.1.log`. To open the folder: the tray icon's
-  **Open logs folder**, the monitor's Troubleshooting section, or the display app's **Settings > Logs**
-  (on Linux the app logs to `~/.local/share/cockpitcast/logs/`). For a bug report, the monitor's
-  Troubleshooting section and the app's **Save logs to desktop** zip them with Windows' recent crash records.
+  when it runs on this PC. The previous run's are kept as `*.1.log`. To open the folder: **Help > Logs**
+  or **Settings** in the CockpitCast window, or the display app's **Settings > Logs** (on Linux the app
+  logs to `~/.local/share/cockpitcast/logs/`). For a bug report, **Help > Logs** and the app's
+  **Save logs to desktop** zip them with Windows' recent crash records.
 - **Saved layouts and screens:** `%LOCALAPPDATA%\CockpitCast\`.
 
 ## Troubleshooting
@@ -393,10 +393,10 @@ keys. For example:
 | Problem | Try |
 |---|---|
 | Client does not find the host | Firewall: allow Node.js on private networks. Both devices on the same subnet? Type the address in Settings instead |
-| Displays stay "waiting" in a glass cockpit | Is the hook installed (`/api/status`: `hook.connected`)? Rebuilt after the last sim update? Monitor page: is the display listed, and marked primary? |
+| Displays stay "waiting" in a glass cockpit | Is the hook installed (`/api/status`: `hook.connected`)? Rebuilt after the last sim update? **Help > Diagnostics**: is the display listed, and marked primary? |
 | No frames after the flight loads | `capture.log` and `/api/status` (`injector`, `sources[].stats`). The injector tries once per sim session; restart the sim to retry |
-| The hook isn't installed or detected (moved add-ons, Addons Linker, MS Store version) | The monitor page's **Troubleshooting** section (`/#trouble-hook`): a ready-made command installs the hook into a Community folder you paste |
-| The display app crashes (Windows: "cockpitcast has stopped working") | Its log (Settings > Logs) and Windows' crash records: **Save logs to desktop** in the app, or the monitor's Troubleshooting section |
+| The hook isn't installed or detected (moved add-ons, Addons Linker, MS Store version) | **Sim add-on** (`/#addon`): choose the Community folder and press Save, then Reinstall. At its bottom: a ready-made command, or copying the built hook in yourself |
+| The display app crashes (Windows: "cockpitcast has stopped working") | Its log (Settings > Logs) and Windows' crash records: **Save logs to desktop** in the app, or **Help > Logs** in the CockpitCast window |
 | Another mod stopped working after installing the hook | Another Community package replaces the same file; only one can win |
 | Steam gauges show NO DATA | The host reads SimConnect only while a client shows gauges; check the sim state on the monitor page |
 | Windows: "Bad Image ... not designed to run on Windows", error status `0xc0e90002` | Smart App Control (Windows 11) blocked an unsigned file. Signed releases fix this; until then use a PC with Smart App Control off. Turning it off cannot be undone without resetting Windows, so think twice |

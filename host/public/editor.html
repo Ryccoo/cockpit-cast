@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CockpitCast Editor</title>
+<title>CockpitCast</title>
 <style>
   :root {
     --bg: #0f1012; --panel: #17181b; --panel2: #1e2024; --line: #2c2f35; --text: #e6e6e6; --muted: #9aa0a8;
@@ -12,18 +12,62 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  body { display: flex; flex-direction: column; }
-  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-  header .status { color: var(--muted); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  header .status.ok::before { content: "● "; color: var(--accent); }
-  header .status.bad::before { content: "● "; color: var(--danger); }
-  header a { color: var(--muted); margin-left: auto; }
-  header .tabs { display: flex; gap: 4px; }
-  header .tabs button { background: transparent; border-color: transparent; color: var(--muted); padding: 4px 12px; }
-  header .tabs button.on { background: var(--panel2); border-color: var(--line); color: var(--text); }
+  /* the window: side menu | the chosen section; the status bar under both, in every section */
+  body { display: grid; grid-template-columns: 172px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  #side { grid-row: 1; grid-column: 1; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; overflow: auto; }
+  #side .brand { font-size: 16px; font-weight: 600; padding: 2px 10px 12px; }
+  #side button.nav { text-align: left; background: transparent; border-color: transparent; color: var(--muted); padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #side button.nav:hover { color: var(--text); }
+  #side button.nav.on { background: var(--panel2); border-color: var(--line); color: var(--text); }
+  .navdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .navdot.ok { background: var(--accent); } .navdot.warn { background: var(--warn); } .navdot.bad { background: var(--danger); }
+  #side .foot { margin-top: auto; padding: 12px 10px 2px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+  #side .foot a { color: var(--accent); text-decoration: none; }
+  #content { grid-row: 1; grid-column: 2; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  #sbar { grid-row: 2; grid-column: 1 / -1; display: flex; gap: 18px; align-items: center; padding: 5px 12px; border-top: 1px solid var(--line); background: var(--panel); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+  #sbar .sbi::before { content: "\25CF  "; color: #5a6068; }
+  #sbar .sbi.ok::before { color: var(--accent); } #sbar .sbi.warn::before { color: var(--warn); } #sbar .sbi.bad::before { color: var(--danger); }
+  #sbar .sbi b { color: var(--text); font-weight: 500; }
+  #sbar .sbu { color: var(--accent); text-decoration: none; } #sbar .sbu.bad { color: #ffb4ae; }
+  [data-go] { cursor: pointer; }
+  @media (max-width: 700px) {
+    body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
+    #side { grid-row: 1; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 6px; }
+    #side .brand, #side .foot { display: none; }
+    #content { grid-row: 2; grid-column: 1; }
+    #sbar { grid-row: 3; overflow-x: auto; }
+  }
   main { display: grid; grid-template-columns: 260px 1fr 320px; flex: 1; min-height: 0; }
-  body[data-tab=screens] main, body[data-tab=addon] main { display: none; }
+  body:not([data-tab=layouts]) main { display: none; }
+  /* Status, Help, Settings */
+  .page { display: none; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
+  body[data-tab=status] #statusPage, body[data-tab=help] #helpPage, body[data-tab=settings] #settingsPage { display: flex; }
+  .page > .body { overflow: auto; padding: 14px 16px 24px; min-width: 0; }
+  .stcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  .stcard { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid #4a4f57; border-radius: 8px; padding: 10px 12px; min-width: 0; }
+  .stcard.ok { border-left-color: var(--accent); } .stcard.warn { border-left-color: var(--warn); } .stcard.bad { border-left-color: var(--danger); }
+  .stcard .h { color: var(--muted); font-size: 12px; }
+  .stcard .v { font-size: 16px; font-weight: 600; margin: 2px 0 4px; overflow-wrap: anywhere; }
+  .stcard .d { color: var(--muted); font-size: 12px; }
+  .stcard a { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--accent); text-decoration: none; }
+  .stwarn { border: 1px solid var(--warn); background: #2a2414; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; }
+  .stwarn.bad { border-color: var(--danger); background: #2a1d1d; } .stwarn.ok { border-color: var(--accent); background: #1d2a22; }
+  .stwarn a { color: inherit; font-weight: 600; }
+  .doc { max-width: 960px; }
+  .doc p, .doc li { font-size: 13px; }
+  .doc details { border-top: 1px solid var(--line); padding: 6px 0; }
+  .doc details > summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 4px 0; }
+  .doc a { color: var(--accent); }
+  .doc code { font-size: 12px; }
+  .cmd { position: relative; margin: 6px 0 10px; }
+  .cmd pre { background: #0c0d0f; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 0; white-space: pre-wrap; word-break: break-all; font-size: 12px; user-select: all; }
+  .cmd button { position: absolute; top: 4px; right: 4px; font-size: 11px; padding: 2px 10px; }
+  .dtable { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .dtable th, .dtable td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .dtable th { color: var(--muted); font-weight: 600; }
+  .dtable .sub { margin-top: 0; }
+  .nowrap { white-space: nowrap; }
+  label.chk { display: flex; gap: 8px; align-items: baseline; margin: 10px 0 4px; flex-wrap: wrap; }
   /* screens tab: rows are screens, columns all aircraft + one per aircraft with its own choices */
   #screensPage { display: none; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
   #screensPage .body, #screensPage .toolbar { min-width: 0; }
@@ -110,17 +154,14 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .seg button { border: 0; border-radius: 0; }
   .seg button.on { background: var(--accent2); }
-  /* preview of all screens */
-  #preview { position: fixed; inset: 0; background: #08090a; display: none; flex-direction: column; z-index: 10; }
-  #preview.open { display: flex; }
-  #preview .bar { display: flex; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  #preview .bar h1 { font-size: 16px; margin: 0; font-weight: 600; }
-  #preview .grid { flex: 1; display: flex; flex-wrap: wrap; gap: 18px; padding: 18px; align-content: center; justify-content: center; overflow: auto; }
-  #preview .card { display: flex; flex-direction: column; gap: 6px; }
-  #preview .card .t { color: var(--muted); font-size: 13px; }
-  #preview .card .t b { color: var(--text); font-weight: 600; }
-  #preview .screenbox { background: #000; box-shadow: 0 0 0 1px var(--line); position: relative; display: flex; align-items: center; justify-content: center; }
-  #preview .screenbox .none { color: var(--muted); }
+  /* Status: what each screen shows now */
+  .pgrid { display: flex; flex-wrap: wrap; gap: 18px; padding: 18px; align-content: flex-start; height: 58vh; min-height: 300px; background: #08090a; border: 1px solid var(--line); border-radius: 8px; overflow: auto; }
+  .pgrid .card { display: flex; flex-direction: column; gap: 6px; }
+  .pgrid .card .t { color: var(--muted); font-size: 13px; }
+  .pgrid .card .t b { color: var(--text); font-weight: 600; }
+  .pgrid .screenbox { background: #000; box-shadow: 0 0 0 1px var(--line); position: relative; display: flex; align-items: center; justify-content: center; }
+  .pgrid .screenbox .none { color: var(--muted); }
+  .pgrid .empty { padding: 20px; }
   /* insert window */
   #insert { position: fixed; inset: 0; background: #000000b8; display: none; z-index: 20; align-items: center; justify-content: center; padding: 24px; }
   #insert.open { display: flex; }
@@ -148,17 +189,36 @@
   #insert details.grp.now { border-color: var(--accent); }
   .insertbtn { width: 100%; padding: 10px; font-weight: 600; }
   #cropCv { width: 100%; display: block; background: #000; border-radius: 4px; cursor: crosshair; touch-action: none; margin: 6px 0; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; flex: none; } aside { border: 0; } .stagewrap { height: 60vh; } header { flex-wrap: wrap; } }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; flex: none; } aside { border: 0; } .stagewrap { height: 60vh; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>CockpitCast</h1>
-  <nav class="tabs"><button data-tab="layouts">Layouts</button><button data-tab="screens">Screens</button><button data-tab="addon">Sim add-on</button></nav>
-  <span id="conn" class="status bad">connecting</span>
-  <a href="/">Monitor</a>
-  <a href="https://ko-fi.com/richardludvigh" target="_blank" rel="noopener" title="CockpitCast is free and open source. Support it on Ko-fi." style="margin-left:0;color:#e06c75">&#9829; Support</a>
-</header>
+<nav id="side">
+  <div class="brand">CockpitCast</div>
+  <button class="nav" data-tab="status">Status</button>
+  <button class="nav" data-tab="screens">Screens</button>
+  <button class="nav" data-tab="layouts">Layouts</button>
+  <button class="nav" data-tab="addon">Sim add-on <span id="navAddonDot" class="navdot"></span></button>
+  <button class="nav" data-tab="help">Help</button>
+  <button class="nav" data-tab="settings">Settings <span id="navSettingsDot" class="navdot"></span></button>
+  <div class="foot">
+    <span>Version <span id="sideVer">…</span></span>
+    <a id="sideUpd" href="#settings" data-go="settings" style="display:none"></a>
+    <a href="https://ko-fi.com/richardludvigh" target="_blank" rel="noopener" title="CockpitCast is free and open source. Support it on Ko-fi." style="color:#e06c75">&#9829; Support CockpitCast</a>
+  </div>
+</nav>
+<div id="content">
+<section id="statusPage" class="page"><div class="body">
+  <div id="stWarn"></div>
+  <div id="stCards" class="stcards"></div>
+  <div class="row" style="margin:20px 0 8px">
+    <h2 style="margin:0">What each screen shows now</h2>
+    <span class="seg" title="Where the needles of steam gauges get their values"><button data-mode="live">Live data</button><button data-mode="demo">Demo</button></span>
+    <span class="hint" id="previewHint"></span>
+  </div>
+  <div class="pgrid" id="previewGrid"></div>
+  <div class="hint">From the saved settings in <a href="#screens" data-go="screens" style="color:inherit">Screens</a>, for the loaded aircraft. Glass displays are live while MSFS runs a flight.</div>
+</div></section>
 <main>
   <aside>
     <h2>Layouts</h2>
@@ -170,7 +230,7 @@
     </div>
     <div class="row"><button id="btnReset" class="danger">Reset all to defaults</button></div>
 
-    <div class="hint" style="margin-top:14px">Which screen shows which layout: the <a href="#screens" data-tab="screens" style="color:inherit">Screens</a> tab.</div>
+    <div class="hint" style="margin-top:14px">Which screen shows which layout: <a href="#screens" data-go="screens" style="color:inherit">Screens</a>.</div>
   </aside>
 
   <section class="center">
@@ -202,7 +262,7 @@
     <span id="screensDirty" class="dirty"></span>
     <span id="screensMsg" class="hint"></span>
     <span class="grow"></span>
-    <button id="btnPreviewNow" title="What every screen shows right now">Preview now</button>
+    <button id="btnPreviewNow" title="Status: what every screen shows right now">Preview</button>
     <select id="localMode" style="display:none;width:auto" title="Always on top: in front of everything, also the taskbar, not in Alt+Tab. Normal windows: in Alt+Tab and on the taskbar, like other windows. Either way: right-click a local screen to turn local screens off.">
       <option value="top">Local screens: always on top</option>
       <option value="normal">Local screens: normal windows</option>
@@ -233,19 +293,114 @@
     <div class="hint">The folder MSFS loads add-ons from. With <b>MSFS Addons Linker</b>: the Community folder set in its Options (where it puts the links), <b>not</b> your add-ons library: MSFS does not read the library. CockpitCast remembers the folder you install into.</div>
     <details id="hookTried"><summary>Where CockpitCast looked</summary><div id="hookTriedList"></div></details>
     <pre id="hookOut"></pre>
+    <h2>If Reinstall doesn't work</h2>
+    <div class="doc">
+    <details id="tHook">
+      <summary>Install it with a command</summary>
+      <ol>
+        <li>Close MSFS (check Task Manager: no <code>FlightSimulator2024.exe</code>).</li>
+        <li>Paste your Community folder below (open it in Explorer and copy the path from the address bar).</li>
+        <li>Open Windows PowerShell (Start, type <i>PowerShell</i>; a normal window, not "Run as administrator"), paste the command, press Enter. It ends with <code>Installed &hellip;</code> and CockpitCast remembers the folder.</li>
+        <li>Start MSFS and load a flight.</li>
+      </ol>
+      <input id="tFolder" spellcheck="false" placeholder="e.g. C:\Users\you\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community">
+      <div class="cmd"><pre id="cmdInstall"></pre><button data-copy="cmdInstall">Copy</button></div>
+      <p>If it says the folder doesn't exist although Explorer opens it, this checks what CockpitCast sees (<code>found, folder: true</code> is fine; <code>EPERM</code> or <code>EACCES</code> means access denied, by an elevated CockpitCast or security software):</p>
+      <div class="cmd"><pre id="cmdCheck"></pre><button data-copy="cmdCheck">Copy</button></div>
+      <p>Only one add-on can replace the sim file the hook uses. If the output names another package that "also replaces BaseInstrument.js", move that package out of the Community folder (or untick it in Addons Linker) and run the command again.</p>
+    </details>
+    <details id="tManual">
+      <summary>Copy the hook into the Community folder yourself</summary>
+      <p>If Explorer opens your Community folder but CockpitCast can't install into it, put the hook there by hand:</p>
+      <ol>
+        <li>Close MSFS. <button id="btnBuildHook" type="button">Build the hook</button> (from your sim's files; a few seconds) <span id="buildHookMsg" class="hint"></span></li>
+        <li><button id="btnOpenBuilt" type="button">Show it in Explorer</button>: the folder <code>zzz-cockpitcast-hook</code> is selected.</li>
+        <li>Copy that folder into your Community folder (replace it if it's already there).</li>
+        <li>Start MSFS and load a flight. After every MSFS update, do this again: CockpitCast warns when the hook is outdated.</li>
+      </ol>
+      <p>So CockpitCast keeps that folder for the future, enter it above and press <b>Save</b>.</p>
+    </details>
+    </div>
   </div></div>
 </section>
 
-<div id="preview">
-  <div class="bar">
-    <h1>All screens</h1>
-    <span class="seg"><button data-mode="live">Live data</button><button data-mode="demo">Demo</button></span>
-    <span class="hint" id="previewHint"></span>
-    <span style="flex:1"></span>
-    <button id="btnClosePreview">Close (Esc)</button>
+<section id="helpPage" class="page"><div class="body"><div class="doc">
+  <h2>Problems and fixes</h2>
+  <details id="tAdmin">
+    <summary>CockpitCast is running as administrator</summary>
+    <p>An elevated CockpitCast can be refused folders you can open yourself, such as the MS Store sim's Community folder. Right-click the CockpitCast tray icon, choose <b>Quit CockpitCast</b>, then start <b>CockpitCast</b> from the Start menu normally (not "Run as administrator").</p>
+  </details>
+  <details id="tGlass">
+    <summary>The glass displays don't appear (the hook isn't detected)</summary>
+    <p>CockpitCast needs its <b>hook</b>, a small add-on, in the Community folder MSFS actually loads add-ons from. <a href="#addon" data-go="addon">Sim add-on</a> shows where it is and can reinstall it; at its bottom are two ways to install it by hand.</p>
+    <p>The hook holds a copy of one sim file: after every MSFS update, reinstall it (CockpitCast warns when it's outdated).</p>
+  </details>
+  <details>
+    <summary>Which Community folder does MSFS use?</summary>
+    <p>The Steam version keeps add-ons in <code>%APPDATA%\Microsoft Flight Simulator 2024\Packages\Community</code>, the MS Store / Xbox app version in <code>%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community</code>, unless the packages folder was moved when the sim was installed. The sim's settings file names the real one: its <code>InstalledPackagesPath</code> line, plus <code>\Community</code>. This shows it for both versions:</p>
+    <div class="cmd"><pre id="cmdWhere"></pre><button data-copy="cmdWhere">Copy</button></div>
+    <p>With MSFS Addons Linker: the Community folder set in its Options (where it puts the links), not your add-ons library.</p>
+  </details>
+  <details>
+    <summary>A local screen covers what I need</summary>
+    <p>Right-click it: <b>Turn local screens off</b> or <b>Open CockpitCast</b>. Or untick <b>Show local screens</b> in the tray menu. In <a href="#screens" data-go="screens">Screens</a>, <i>Local screens: normal windows</i> makes them behave like other windows (in Alt+Tab, not always on top).</p>
+  </details>
+  <details>
+    <summary>Antivirus warnings (AVG, Avast, ...)</summary>
+    <p>CockpitCast is not code-signed yet, and its injector loads the capture module into the sim, which antivirus software watches closely. A warning like AVG's "Suspicious file detected" (CyberCapture) is a check, not a finding: let the scan finish. If the antivirus blocks <code>cockpitcast-injector.exe</code>, the glass displays can't be captured (steam gauges still work); allowing CockpitCast's folder (<code>%LOCALAPPDATA%\Programs\CockpitCast</code>) fixes it. CockpitCast is open source: the code is on <a href="https://github.com/Ryccoo/cockpit-cast" target="_blank" rel="noopener">GitHub</a>.</p>
+  </details>
+  <details id="tLogs">
+    <summary>Logs: look at them, or send them with a bug report</summary>
+    <p>All CockpitCast logs on this PC are in one folder: CockpitCast (<code>host.log</code>), the capture module in the sim (<code>capture.log</code>), the hook setup, and the display app if it runs here (<code>client.log</code>; on a display PC: Settings &rsaquo; Logs in the app). The previous run's are kept as <code>*.1.log</code>. <button id="btnOpenLogs" type="button">Open logs folder</button> <span id="openLogsMsg" class="hint"></span></p>
+    <p>For a bug report, this puts them into <code>CockpitCast-logs.zip</code> on your desktop, with Windows' records of crashes from the last 3 hours, to attach to a message or a GitHub issue. They contain this PC's name, user name, folder paths and aircraft names, nothing else personal. Paste it into Windows PowerShell:</p>
+    <div class="cmd"><pre id="cmdLogs"></pre><button data-copy="cmdLogs">Copy</button></div>
+  </details>
+  <h2 style="margin-top:24px">Diagnostics</h2>
+  <details open>
+    <summary>Display apps</summary>
+    <div id="diagApps"></div>
+  </details>
+  <details>
+    <summary>Instruments in this cockpit <span id="diagInstAc" class="sub"></span></summary>
+    <div class="row" style="margin:4px 0"><button id="diagInstRefresh" class="icon">Refresh</button></div>
+    <div id="diagInst"><p class="hint">Loading…</p></div>
+  </details>
+</div></div></section>
+
+<section id="settingsPage" class="page"><div class="body"><div class="doc" style="max-width:780px">
+  <p id="setLocalOnly" class="hint warn" style="display:none">This window is open on another computer: these settings can be changed on the sim PC only.</p>
+  <h2>Version and updates</h2>
+  <div class="kv"><div class="k">CockpitCast</div><div id="setVersion">—</div></div>
+  <div class="row">
+    <button id="btnCheckUpdate">Check for updates</button>
+    <button id="btnInstallUpdate" class="primary" style="display:none">Install and restart</button>
+    <span id="setCheckMsg" class="hint"></span><span id="setInstallHint" class="hint"></span>
   </div>
-  <div class="grid" id="previewGrid"></div>
+  <div class="hint">CockpitCast checks by itself a minute after it starts and every 12 hours. Installing restarts it; display PCs with the installed display app update too.</div>
+  <label class="chk"><input type="checkbox" id="setBeta"> Beta versions <span class="hint">test versions published before a release, for testers. Off: normal releases only. A beta updates to its release by itself.</span></label>
+  <h2 style="margin-top:22px">Windows</h2>
+  <label class="chk"><input type="checkbox" id="setStartup"> Start CockpitCast when I sign in to Windows <span class="hint">(tray icon only; open the window from it)</span></label>
+  <div id="setStartupMsg" class="hint warn"></div>
+  <h2 style="margin-top:22px">Logs</h2>
+  <p><button id="btnOpenLogs2" type="button">Open logs folder</button> <span id="openLogsMsg2" class="hint"></span> To send them with a bug report: <a href="#help" data-go="help">Help</a> &rsaquo; Logs.</p>
+  <h2 style="margin-top:22px">About</h2>
+  <p>CockpitCast is free and open source (GPL-3.0).
+    <a href="https://cockpitcast.ludvigh.dev" target="_blank" rel="noopener">Website</a> ·
+    <a href="https://github.com/Ryccoo/cockpit-cast" target="_blank" rel="noopener">GitHub</a> (code, issues) ·
+    <a href="https://ko-fi.com/richardludvigh" target="_blank" rel="noopener" style="color:#e06c75">&#9829; Support it on Ko-fi</a></p>
+</div></div></section>
 </div>
+
+<footer id="sbar">
+  <span id="sbVer">CockpitCast</span>
+  <a id="sbUpd" class="sbu" href="#settings" data-go="settings" style="display:none"></a>
+  <span id="sbHost" class="sbi">Host <b>…</b></span>
+  <span id="sbSim" class="sbi">Sim <b>…</b></span>
+  <span id="sbHook" class="sbi" data-go="addon">Hook <b>…</b></span>
+  <span id="sbCap" class="sbi">Capture <b>…</b></span>
+  <span id="sbApps" class="sbi" data-go="help">Display apps <b>…</b></span>
+  <span id="sbAdmin" class="sbi bad" data-go="help" style="display:none"><b>running as administrator</b></span>
+</footer>
 
 <div id="insert">
   <div class="box">
@@ -269,7 +424,6 @@
 </div>
 
 <script src="/gauges.js"></script>
-<script src="/update-banner.js"></script>
 <script>
 'use strict';
 // ---- gauge catalogue ----
@@ -376,6 +530,8 @@ function sizeCanvas(cv) {
 }
 let lastDraw = 0;
 let lastSlow = 0;
+// The preview of all screens is in the Status section.
+const previewShown = () => document.body.dataset.tab === 'status';
 function drawLoop(now) {
   requestAnimationFrame(drawLoop);
   if (now - lastDraw < 30) return;
@@ -385,7 +541,7 @@ function drawLoop(now) {
     if (now - lastSlow > 500) { lastSlow = now; drawAll(insertList); updateSubs(); }
     return;
   }
-  drawAll($('preview').classList.contains('open') ? previewList : drawList);
+  drawAll(previewShown() ? previewList : drawList);
   drawCrop();
   updateLive();
   if (now - lastSlow > 1000) { lastSlow = now; updateSubs(); }
@@ -457,9 +613,9 @@ function updateSubs() {
   // Insert window: only displays in the loaded cockpit (the others have no frames, and watching
   // them would take capture slots from real ones), one picture every 5 s: previews only.
   if ($('insert').classList.contains('open')) for (const id of catalog ? catalog.present : displayIds.filter((x) => displayInfo[x]?.live)) add(id, 0.2);
-  else if ($('preview').classList.contains('open')) {
+  else if (previewShown()) {
     for (const sc of screens) for (const id of glassOf(previewContent(sc).layout)) add(id, 10);
-  } else for (const id of glassOf(draft)) add(id, 10);
+  } else if (document.body.dataset.tab === 'layouts') for (const id of glassOf(draft)) add(id, 10);
   applySubs(want);
 }
 function applySubs(want) {
@@ -541,6 +697,7 @@ function connect() {
   ws.onmessage = (ev) => {
     if (typeof ev.data !== 'string') return void onFrame(ev.data);
     const m = JSON.parse(ev.data);
+    if (typeof shellMsg === 'function') shellMsg(m);
     if (m.type === 'layouts') onLayouts(m.layouts);
     else if (m.type === 'screens') {
       screens = m.screens;
@@ -548,7 +705,7 @@ function connect() {
       if (!screensDirty) { screensDraft = null; aircraftDraft = null; }
       renderScreens();
       renderLayouts();
-      if ($('preview').classList.contains('open')) renderPreview();
+      if (previewShown()) renderPreview();
     }
     else if (m.type === 'displays') {
       displayIds = m.displays.map((d) => d.id);
@@ -556,6 +713,7 @@ function connect() {
       displayInfo = Object.fromEntries(m.displays.map((d) => [d.id, d]));
       renderScreens();
       if ($('insert').classList.contains('open')) renderInsert();
+      if (typeof renderShell === 'function') renderShell(); // capture state in the status bar
     }
     else if (m.type === 'catalog') {
       catalog = m;
@@ -563,7 +721,7 @@ function connect() {
       if ($('insert').classList.contains('open')) { renderInsert(); updateSubs(); }
       if (document.body.dataset.tab === 'screens') renderScreens(); // the aircraft's display lists
     }
-    else if (m.type === 'status') { window.showUpdate?.(m.update, send); const sp = m.sim?.speeds; refs = sp ? Object.fromEntries(Object.entries({ vfe: sp.vfe, vno: sp.vno }).filter(([, v]) => v)) : {}; }
+    else if (m.type === 'status') { const sp = m.sim?.speeds; refs = sp ? Object.fromEntries(Object.entries({ vfe: sp.vfe, vno: sp.vno }).filter(([, v]) => v)) : {}; }
     else if (m.type === 'dataVars') { varInfo = m.info || m.vars.map((k) => ({ key: k, name: k, unit: '' })); varIndex = Object.fromEntries(m.vars.map((k, i) => [k, i])); renderProps(); }
     else if (m.type === 'data') { latest = m.v; latestAt = performance.now(); }
     else if (m.type === 'apps') { apps = m.list || []; if (document.body.dataset.tab === 'screens') updateScreenStatus(); }
@@ -573,9 +731,8 @@ function connect() {
 }
 function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 function setConn() {
-  const c = $('conn');
-  c.textContent = connected ? `connected to ${location.host}` : 'not connected, retrying';
-  c.className = 'status ' + (connected ? 'ok' : 'bad');
+  if (typeof renderShell === 'function') renderShell(); // the status bar
+  if (!connected && previewShown()) renderPreview();
 }
 function showErr(t) { $('err').textContent = t || ''; }
 
@@ -586,10 +743,8 @@ function onLayouts(list) {
   if (!dirty || !draft) loadDraft();
   renderLayouts();
   renderScreens();
-  if (location.hash === '#preview' && !previewOpened) { previewOpened = true; $('preview').classList.add('open'); }
-  if ($('preview').classList.contains('open')) renderPreview();
+  if (previewShown()) renderPreview();
 }
-let previewOpened = false;
 function loadDraft() {
   const l = layouts.find((x) => x.id === currentId);
   draft = l ? clone(l) : null;
@@ -832,7 +987,7 @@ function renderScreensToolbar() {
   $('btnScreens').disabled = !screensDirty;
   $('btnScreensRevert').disabled = !screensDirty;
   $('screensDirty').textContent = screensDirty ? 'Unsaved changes' : '';
-  document.querySelector('.tabs [data-tab=screens]').textContent = screensDirty ? 'Screens *' : 'Screens';
+  document.querySelector('#side [data-tab=screens]').textContent = screensDirty ? 'Screens *' : 'Screens';
   const cols = new Set(screenColumns());
   const rest = knownAircraft.filter((a) => !cols.has(a)).sort((x, y) => acName(x).localeCompare(acName(y)));
   $('addAircraft').innerHTML = `<option value="">${rest.length ? 'Set up another aircraft…' : 'No other aircraft flown yet'}</option>`
@@ -884,7 +1039,7 @@ async function loadHookStatus() {
 }
 // The API answers only on the sim PC itself.
 function renderHookRemote() {
-  $('hookStatus').innerHTML = `<div class="hint warn">Open the editor on the sim PC (<code>http://localhost:${esc(location.port || '8800')}/editor#addon</code>) to check or reinstall the hook.</div>`;
+  $('hookStatus').innerHTML = `<div class="hint warn">Open CockpitCast on the sim PC (<code>http://localhost:${esc(location.port || '8800')}/#addon</code>) to check or reinstall the hook.</div>`;
   $('hookDir').disabled = true;
   $('btnHookReinstall').disabled = true;
   $('btnHookSave').disabled = true;
@@ -963,22 +1118,26 @@ $('btnHookReinstall').onclick = async () => {
 };
 
 // ---- tabs ----
+const TABS = ['status', 'screens', 'layouts', 'addon', 'help', 'settings'];
 function setTab(tab) {
+  if (!TABS.includes(tab)) tab = 'status';
   document.body.dataset.tab = tab;
-  for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === tab);
-  history.replaceState(null, '', tab === 'layouts' ? location.pathname + location.search : `#${tab}`);
+  for (const b of document.querySelectorAll('#side .nav')) b.classList.toggle('on', b.dataset.tab === tab);
+  history.replaceState(null, '', `${location.pathname}${location.search}#${tab}`);
   if (tab === 'screens') renderScreens(true);
   else if (tab === 'layouts') renderStage();
+  else if (tab === 'status') renderPreview();
   clearInterval(hookTimer);
   if (tab === 'addon') { loadHookStatus(); hookTimer = setInterval(() => { if (!document.hidden) loadHookStatus(); }, 5000); }
   updateAppsSub();
   updateSubs();
+  if (typeof shellTab === 'function') shellTab(tab);
 }
 for (const b of document.querySelectorAll('[data-tab]')) b.onclick = (e) => { e.preventDefault(); setTab(b.dataset.tab); };
-// Connected display apps, for the status lines: only while the Screens tab is shown.
+// Connected display apps (status bar, Status, Help, the Screens tab's status lines): while the window is shown.
 let appsSub = false;
 function updateAppsSub() {
-  const want = connected && document.body.dataset.tab === 'screens' && !document.hidden;
+  const want = connected && !document.hidden;
   if (want === appsSub) return;
   appsSub = want;
   send({ type: want ? 'subscribeApps' : 'unsubscribeApps' });
@@ -1068,7 +1227,7 @@ function startDrag(e, g, mode) {
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
 }
-window.addEventListener('resize', () => { renderStage(); if ($('preview').classList.contains('open')) renderPreview(); });
+window.addEventListener('resize', () => { renderStage(); if (previewShown()) renderPreview(); });
 
 // ---- preview: what every screen shows right now (the host's live state, saved settings) ----
 // A glass display (live picture when the sim runs), a layout, or nothing yet. It never guesses: other
@@ -1085,17 +1244,16 @@ function previewContent(s) {
   }
   return { what: 'nothing yet', layout: null };
 }
-$('btnPreviewNow').onclick = () => { $('preview').classList.add('open'); renderPreview(); updateSubs(); };
+$('btnPreviewNow').onclick = () => setTab('status');
 // Screen edits (names, layouts, added screens) show in the preview before they are saved.
-function refreshPreview() { if ($('preview').classList.contains('open')) renderPreview(); }
-$('btnClosePreview').onclick = () => { $('preview').classList.remove('open'); updateSubs(); };
+function refreshPreview() { if (previewShown()) renderPreview(); }
 function renderPreview() {
   const grid = $('previewGrid');
   previewList = [];
   grid.innerHTML = '';
   const list = screens;
   $('previewHint').textContent = `What each screen shows now${loadedAircraft ? ` in the ${acName(loadedAircraft)}` : ''} (saved settings).`;
-  if (!list.length) { grid.innerHTML = '<div class="empty">No screens.</div>'; return; }
+  if (!list.length) { grid.innerHTML = `<div class="empty">${connected ? 'No screens.' : 'Not connected to CockpitCast.'}</div>`; return; }
   // Size the cards so all screens fit: try 1..n columns and keep the biggest.
   const W = grid.clientWidth - 36, H = grid.clientHeight - 36, n = list.length;
   let best = { cols: 1, w: 0 };
@@ -1135,7 +1293,6 @@ function renderPreview() {
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if ($('insert').classList.contains('open')) closeInsert();
-  else $('preview').classList.remove('open');
 });
 
 // ---- properties panel ----
@@ -1452,7 +1609,6 @@ function updateLive() {
 
 // ---- keyboard ----
 window.addEventListener('keydown', (e) => {
-  if ($('preview').classList.contains('open')) return;
   if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (document.body.dataset.tab === 'screens') { if (screensDirty) $('btnScreens').click(); } else if (document.body.dataset.tab === 'layouts') save(); return; }
   if (document.body.dataset.tab !== 'layouts') return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
@@ -1475,7 +1631,8 @@ window.addEventListener('beforeunload', (e) => { if (dirty || screensDirty) { e.
 let saved = 'demo';
 try { saved = localStorage.getItem('clEditorData') || 'demo'; } catch {}
 setDataMode(saved === 'live' ? 'live' : 'demo');
-setTab({ '#screens': 'screens', '#addon': 'addon' }[location.hash] || 'layouts');
+// Old links: /#trouble (the former monitor page), /#trouble-hook, /editor#preview.
+setTab({ '#trouble': 'help', '#trouble-hook': 'addon', '#preview': 'status' }[location.hash] || location.hash.slice(1) || 'status');
 connect();
 // A hidden tab (minimised, another tab in front) costs the sim nothing: previews and the catalog's
 // picture grabs stop, and start again when the tab is shown.
@@ -1485,5 +1642,6 @@ document.addEventListener('visibilitychange', () => {
   updateAppsSub();
 });
 </script>
+<script src="/shell.js"></script>
 </body>
 </html>

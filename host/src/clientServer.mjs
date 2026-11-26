@@ -13,10 +13,11 @@ import { makeLog } from './log.mjs';
 const log = makeLog('clients');
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const MAX_BUFFERED = 1024 * 1024;
-const PAGES = { '/': 'monitor.html', '/monitor.html': 'monitor.html', '/editor': 'editor.html', '/editor.html': 'editor.html', '/update-banner.js': 'update-banner.js' }; // skip frames for a client with more than this unsent
+// The CockpitCast window (editor.html + shell.js); /editor and the former monitor page lead to it too.
+const PAGES = { '/': 'editor.html', '/monitor.html': 'editor.html', '/editor': 'editor.html', '/editor.html': 'editor.html', '/shell.js': 'shell.js' }; // skip frames for a client with more than this unsent
 
 export class ClientServer {
-  constructor({ port, hub, getStatus, getDetail = () => ({}), onWanted = () => {}, onDataWanted = () => {}, onInstallUpdate = null, onSetUpdateBeta = null, onSetLocalScreens = null, layouts = null, screens = null, catalog = null, maxDataHz = 60, version, dataDir = null }) {
+  constructor({ port, hub, getStatus, getDetail = () => ({}), onWanted = () => {}, onDataWanted = () => {}, onInstallUpdate = null, onSetUpdateBeta = null, onCheckUpdate = null, onSetLocalScreens = null, layouts = null, screens = null, catalog = null, maxDataHz = 60, version, dataDir = null }) {
     // Paused apps (by device and window): they get nothing, so nothing is captured for them. Kept on disk.
     this.pausedFile = dataDir ? path.join(dataDir, 'paused-apps.json') : null;
     this.paused = new Set();
@@ -26,6 +27,7 @@ export class ClientServer {
     this.appsTimer = setInterval(() => this.sendApps(), 2000);
     this.onInstallUpdate = onInstallUpdate;
     this.onSetUpdateBeta = onSetUpdateBeta;
+    this.onCheckUpdate = onCheckUpdate;
     this.onSetLocalScreens = onSetLocalScreens;
     this.layouts = layouts;
     this.catalog = catalog;
@@ -279,6 +281,10 @@ export class ClientServer {
         break;
       case 'setLocalScreens': // the editor's Screens tab: on/off ("on") and the mode ("onTop")
         this.onSetLocalScreens?.(msg);
+        break;
+      case 'checkUpdate': // Settings' "Check for updates"; pages on this PC only
+        if (!isLoopback(c.addr)) this.send(c, { type: 'error', message: 'updates can be checked only on the sim PC' });
+        else this.onCheckUpdate?.();
         break;
       case 'setUpdateBeta': // the monitor's "beta versions" switch; pages on this PC only
         if (!isLoopback(c.addr)) this.send(c, { type: 'error', message: 'beta versions can be switched only on the sim PC' });

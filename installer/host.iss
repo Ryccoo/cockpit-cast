@@ -86,6 +86,8 @@ Filename: "{app}\node\node.exe"; Parameters: """{app}\hook\install-hook.mjs"" --
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\hook\dist"
+; The sign-in shortcut, also when CockpitCast's Settings made it (not setup).
+Type: files; Name: "{userstartup}\CockpitCast.lnk"
 
 [Code]
 const

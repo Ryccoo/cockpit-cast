@@ -6,7 +6,7 @@
 //   Community hook (every instrument page) --> InstrumentLog (what else the cockpit could stream)
 //   Tray icon (Windows): shows the host is running; click opens the layout editor
 
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig } from './config.mjs';
@@ -115,6 +115,7 @@ const clients = new ClientServer({
   onDataWanted: (w) => dataSource.setDataWanted(w),
   onInstallUpdate: () => installUpdate(),
   onSetUpdateBeta: (on) => updater.setBeta(on),
+  onCheckUpdate: () => updater.check(),
   onSetLocalScreens: (msg) => {
     if (typeof msg.on === 'boolean') localScreens.setEnabled(msg.on);
     if (typeof msg.onTop === 'boolean') localScreens.setOnTop(msg.onTop);
@@ -168,6 +169,27 @@ clients.addApi('GET', '/api/troubleshoot', async () => {
     from: h.from,
     elevated: h.elevated,
   };
+});
+// Settings' "Start CockpitCast when I sign in to Windows": the sign-in shortcut setup makes too (its
+// "startup" task), started with --background (tray icon only). Installed copies only (cockpitcast.exe).
+const startupLink = path.join(process.env.APPDATA ?? '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'CockpitCast.lnk');
+clients.addApi('GET', '/api/startup', () => ({ on: process.platform === 'win32' ? fs.existsSync(startupLink) : null }));
+clients.addApi('POST', '/api/startup', async (req) => {
+  const on = !!(await readJson(req)).on;
+  if (!on) {
+    fs.rmSync(startupLink, { force: true });
+    log.info('start with Windows: off');
+    return { on: fs.existsSync(startupLink) };
+  }
+  const exe = path.join(cfg.root, 'cockpitcast.exe');
+  if (process.platform !== 'win32' || !fs.existsSync(exe)) throw new Error('Only an installed CockpitCast can start with Windows.');
+  await new Promise((resolve, reject) => {
+    const ps = "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:CC_LNK); $s.TargetPath = $env:CC_EXE; $s.Arguments = '--background'; $s.WorkingDirectory = $env:CC_DIR; $s.Save()";
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, timeout: 20_000, env: { ...process.env, CC_LNK: startupLink, CC_EXE: exe, CC_DIR: cfg.root } },
+      (err, _out, stderr) => (err ? reject(new Error(String(stderr || err.message).trim())) : resolve()));
+  });
+  log.info('start with Windows: on');
+  return { on: fs.existsSync(startupLink) };
 });
 clients.addApi('POST', '/api/capture/shutdown', () => {
   capture.shutdownSources();
@@ -233,11 +255,10 @@ const tray = new Tray({
     return {
       level: live.length ? 'live' : s.connected ? 'sim' : 'idle',
       lines: [
-        'CockpitCast host',
-        s.connected ? `Sim: ${s.aircraft ?? 'running'}` : 'Sim: not running',
+        s.connected ? `Sim: ${s.inFlight ? s.aircraft ?? 'in flight' : 'in the menu'}` : 'Sim: not running',
         // Streaming: only what client screens show is captured. Setup: an editor or monitor page is
         // open and visible, and previews are captured too.
-        pages ? `Setup: ${pages} open, previews on` : `Streaming: ${live.length ? live.map((d) => d.name).join(', ') : 'nothing captured'}`,
+        `Capturing: ${live.length ? live.map((d) => d.name).join(', ') : 'nothing'}${pages ? ' (window open: previews too)' : ''}`,
         appsLine(clients.appsInfo()),
       ],
     };
@@ -276,7 +297,7 @@ async function installUpdate() {
     throw e;
   }
 }
-log.info(`ready. Debug monitor: http://localhost:${cfg.port}/`);
+log.info(`ready. CockpitCast window: http://localhost:${cfg.port}/`);
 
 // "Display apps: 2 (1 paused)": the client apps only, not the editor or monitor pages.
 function appsLine({ apps, paused }) {
