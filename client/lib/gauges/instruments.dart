@@ -494,9 +494,11 @@ class DialGauge extends GaugePainter {
     }
     final scale = opt('labelScale', 1);
     final labelDecimals = (major * scale) % 1 == 0 ? 0 : 1;
-    for (var v = min; v <= max + 1e-6; v += major) {
-      drawTick(c, a(v), 152, 184, 5);
-      drawText(c, fmtNum(v * scale, labelDecimals), polar(120, a(v)), 30);
+    if (major > 0) {
+      for (var v = min; v <= max + 1e-6; v += major) {
+        drawTick(c, a(v), 152, 184, 5);
+        drawText(c, fmtNum(v * scale, labelDecimals), polar(120, a(v)), 30);
+      }
     }
     drawText(c, optS('label', ''), const Offset(0, -66), 26, spacing: 0.5);
     drawText(c, optS('sublabel', ''), const Offset(0, -38), 20, color: kGrey);
