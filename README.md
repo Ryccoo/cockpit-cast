@@ -103,10 +103,17 @@ After every MSFS update, run **Repair Community hook** from the Start menu (sim 
 contains a copy of a sim file that updates change. Uninstalling removes the program and the hook, and
 asks whether to keep your learned displays and layouts.
 
-If you moved your add-ons to another drive (for example with Addons Linker), setup may not find the
-Community folder. It then asks you to choose the folder the sim loads add-ons from. **Repair Community
-hook** asks for it as well, in its window. CockpitCast remembers the choice, so repairs after sim updates
-use it too.
+Setup shows which **Community folder** the hook goes into, already filled in, so you can check or
+change it. It looks for the folder you chose last time, then the one set in **MSFS Addons Linker**,
+then the sim's own settings and default locations. If you use Addons Linker (add-ons kept in a library
+on another drive, linked into the sim's Community folder), choose the Community folder from its
+options, not the library: MSFS does not read the library. CockpitCast remembers the folder, so repairs
+after sim updates use it too.
+
+The editor's **Sim add-on** tab shows where the hook is installed, its version, and whether the sim is
+running it. Its **Reinstall hook** button rebuilds the hook from your sim's files, the same as **Repair
+Community hook** in the Start menu. Use it after every MSFS update. It works only on the sim PC, with
+MSFS closed.
 
 ### Updates
 
