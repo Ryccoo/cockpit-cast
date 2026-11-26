@@ -147,6 +147,9 @@ clients.addApi('POST', '/api/inject', () => injector.injectNow());
 const hookSetup = new HookSetup({ cfg, hook, version });
 clients.addApi('GET', '/api/hook-setup', () => hookSetup.status());
 clients.addApi('POST', '/api/hook-setup/reinstall', async (req) => hookSetup.reinstall((await readJson(req)).community));
+clients.addApi('POST', '/api/hook-setup/save', async (req) => hookSetup.save((await readJson(req)).community));
+clients.addApi('POST', '/api/hook-setup/build', () => hookSetup.build());
+clients.addApi('POST', '/api/hook-setup/open-built', () => hookSetup.openBuilt());
 // The monitor's Troubleshooting section: open the logs folder in Explorer (on this PC; Windows).
 clients.addApi('POST', '/api/open-logs', () => {
   const dir = path.dirname(cfg.logFile);

@@ -229,7 +229,7 @@
     <div class="hint" style="margin-top:0">CockpitCast puts a small add-on, the <b>hook</b>, into MSFS's Community folder. It tells CockpitCast where each glass display is. It holds a copy of one sim file, so reinstall it after every MSFS update. Reinstalling rebuilds it from your sim's current files.</div>
     <div id="hookStatus"></div>
     <h2>Community folder</h2>
-    <input id="hookDir" placeholder="e.g. D:\MSFS 2024\Community" spellcheck="false">
+    <div class="row"><input id="hookDir" placeholder="e.g. D:\MSFS 2024\Community" spellcheck="false" style="flex:1"><button id="btnHookSave" title="Remember this folder (installs nothing). Reinstall, repairs and updates then use it.">Save</button></div>
     <div class="hint">The folder MSFS loads add-ons from. With <b>MSFS Addons Linker</b>: the Community folder set in its Options (where it puts the links), <b>not</b> your add-ons library: MSFS does not read the library. CockpitCast remembers the folder you install into.</div>
     <details id="hookTried"><summary>Where CockpitCast looked</summary><div id="hookTriedList"></div></details>
     <pre id="hookOut"></pre>
@@ -887,6 +887,7 @@ function renderHookRemote() {
   $('hookStatus').innerHTML = `<div class="hint warn">Open the editor on the sim PC (<code>http://localhost:${esc(location.port || '8800')}/editor#addon</code>) to check or reinstall the hook.</div>`;
   $('hookDir').disabled = true;
   $('btnHookReinstall').disabled = true;
+  $('btnHookSave').disabled = true;
 }
 function renderHook() {
   const h = hookInfo || {};
@@ -900,7 +901,10 @@ function renderHook() {
   $('hookStatus').innerHTML = (h.error ? `<div class="err">${esc(h.error)}</div>` : '')
     + (h.elevated ? '<div class="hint warn"><b>CockpitCast is running as administrator.</b> It can then be refused folders you can open (such as the MS Store sim\'s Community folder). Quit it from the tray icon and start it normally from the Start menu.</div>' : '')
     + '<div class="kv">'
-    + row('Community folder', h.community ? `${esc(h.community)}<div class="sub">found via: ${esc(h.from)}</div>` : '<span class="bad">not found: enter it below</span>')
+    + row('Community folder', h.community
+      ? `${esc(h.community)}<div class="sub">${h.saved ? 'saved (your choice)' : `found via: ${esc(h.from)}`}</div>`
+        + (h.access && h.access !== 'ok' ? `<div class="sub warn">CockpitCast cannot ${h.access === 'denied' ? 'open' : 'find'} this folder right now. It stays saved and nothing is installed anywhere else. ${h.access === 'denied' ? 'Is CockpitCast running as administrator, or blocked by security software?' : 'Is its drive connected?'} If Explorer opens it, install the hook by hand: monitor \u203a Troubleshooting.</div>` : '')
+      : '<span class="bad">not found: enter it below and press Save</span>')
     + row('Hook installed', installed + (stale ? `<div class="sub warn">Not the same version as CockpitCast ${esc(h.hostVersion)}: reinstall it.</div>` : ''))
     + row('MSFS', sim)
     + '</div>';
@@ -921,6 +925,20 @@ function renderHook() {
   }
 }
 $('hookDir').oninput = () => { hookDirTouched = true; };
+$('btnHookSave').onclick = async () => {
+  hookResult = null;
+  try {
+    const r = await fetch('/api/hook-setup/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ community: $('hookDir').value.trim() }) });
+    const j = await r.json().catch(() => ({ error: `The host answered ${r.status}` }));
+    if (!j.ok) hookResult = { text: j.error || 'Not saved.', warn: true };
+    else if (j.access === 'ok') hookResult = { text: 'Saved. Reinstall puts the hook there; repairs and updates use it too.' };
+    else hookResult = { text: `Saved, but CockpitCast cannot ${j.access === 'denied' ? 'open' : 'find'} it right now: reinstalling will fail until it can. If Explorer opens it, install the hook by hand (monitor \u203a Troubleshooting).`, warn: true };
+    if (j.ok) hookDirTouched = false;
+  } catch (e) {
+    hookResult = { text: e.message, warn: true };
+  }
+  loadHookStatus();
+};
 $('btnHookRefresh').onclick = () => { hookDirTouched = false; hookResult = null; $('hookOut').textContent = ''; loadHookStatus(); };
 $('btnHookReinstall').onclick = async () => {
   hookReinstalling = true;

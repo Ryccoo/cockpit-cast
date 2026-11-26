@@ -3,12 +3,18 @@
 //   node hook/install-hook.mjs [--community <folder>] [--force]   install (sim must be closed)
 //   node hook/install-hook.mjs --remove                            uninstall
 //   node hook/install-hook.mjs --detect                            print (JSON) which folder it would use
+//   node hook/install-hook.mjs --community <folder> --save-only    remember the folder, install nothing
 //
 // The Community folder, first match wins: --community, the MSFS_COMMUNITY environment variable, the
 // folder chosen last time (saved in %LOCALAPPDATA%\CockpitCast\hook.json, so repairs after sim updates
 // find it again), the Community folder set in MSFS Addons Linker, the sim's packages folder from
-// UserCfg.opt, the default locations. A folder found through --community or MSFS_COMMUNITY is saved.
-// Exit code 3: no Community folder found (the installer then asks for it). Nothing is changed when it
+// UserCfg.opt, the default locations. A folder named with --community or MSFS_COMMUNITY is saved once
+// the hook was installed there (or right away with --save-only: the editor's Save button).
+// The saved folder is binding: when it cannot be opened (a disconnected drive, an elevated or blocked
+// process), this stops with exit code 3 and changes nothing. It never falls back to another folder:
+// that installed the hook where the sim does not look, and setup then offered that folder and saved it.
+// Only the user picks another folder (setup's page, the editor, --community).
+// Exit code 3: no usable Community folder (the installer then asks for it). Nothing is changed when it
 // exits with an error: an installed hook stays.
 //
 // Addons Linker (popular with people who keep add-ons on another drive) keeps the add-ons in its own
@@ -140,15 +146,35 @@ const found_ = [
 ].filter(([p]) => p);
 const skipped = storeOnly ? found_.filter(([p]) => isSteamPath(p)) : [];
 const candidates = [...named, ...found_.filter((c) => !skipped.includes(c))];
-const firstOk = () => candidates.find(([p]) => probe(p) === 'ok');
+// The saved folder, when nothing is named and it is not a skipped leftover: it is the one, reachable or not.
+const savedPick = !named.length ? candidates.find(([, from]) => from.startsWith('saved in')) ?? null : null;
+const firstOk = () => (savedPick ? (probe(savedPick[0]) === 'ok' ? savedPick : null) : candidates.find(([p]) => probe(p) === 'ok'));
+
+// --save-only: remember the named folder (the editor's Save button), even if it cannot be checked now.
+if (args.has('--save-only')) {
+  const dir = named[0]?.[0];
+  if (!dir) {
+    console.error('--save-only needs --community <folder>');
+    process.exit(1);
+  }
+  fs.mkdirSync(path.dirname(SAVED), { recursive: true });
+  fs.writeFileSync(SAVED, JSON.stringify({ community: dir }, null, 2) + '\n');
+  const access = probe(dir);
+  console.log(JSON.stringify({ saved: dir, access }));
+  process.exit(0);
+}
 
 // --detect: report and change nothing (the editor's Sim add-on tab, setup's folder page).
 if (args.has('--detect')) {
-  const found = firstOk();
+  // The saved folder is reported even when it cannot be opened now (access says why).
+  const found = savedPick ?? firstOk();
+  const access = found ? probe(found[0]) : null;
   console.log(JSON.stringify({
     community: found?.[0] ?? null,
     from: found?.[1] ?? null,
-    installed: !!found && fs.existsSync(path.join(found[0], PKG)),
+    access,
+    saved: !!savedPick,
+    installed: access === 'ok' && fs.existsSync(path.join(found[0], PKG)),
     storeOnly,
     tried: [
       ...candidates.map(([p, from]) => ({ path: p, from, access: probe(p), exists: probe(p) !== 'missing' })),
@@ -165,6 +191,16 @@ if (givenAccess !== 'ok') {
   process.exit(NOT_FOUND);
 }
 const found = firstOk();
+if (!found && savedPick) {
+  // The remembered folder, and it cannot be opened now: stop, never install somewhere else.
+  const access = probe(savedPick[0]);
+  console.error(
+    `The Community folder CockpitCast remembers cannot be ${access === 'denied' ? 'opened' : 'found'} right now:\n  ${savedPick[0]}\n` +
+      (access === 'denied' ? `${DENIED}\n` : 'Is its drive connected? Explorer must open it.\n') +
+      'Nothing was changed. To use another folder, choose it: in the editor\'s Sim add-on tab, in setup, or with --community <folder>.',
+  );
+  process.exit(NOT_FOUND);
+}
 if (!found) {
   const denied = candidates.filter(([p]) => probe(p) === 'denied');
   console.error(
@@ -178,12 +214,14 @@ if (!found) {
 }
 const COMMUNITY = found[0];
 // Remember a folder the user named (also through MSFS_COMMUNITY: an update or uninstall may run without
-// that variable, e.g. from a tray started before it was set).
-if ((found[1] === '--community' || found[1] === 'MSFS_COMMUNITY') && COMMUNITY !== savedCommunity()) {
-  try {
-    fs.mkdirSync(path.dirname(SAVED), { recursive: true });
-    fs.writeFileSync(SAVED, JSON.stringify({ community: COMMUNITY }, null, 2) + '\n');
-  } catch {}
+// that variable, e.g. from a tray started before it was set), once the hook is really there (below).
+function remember() {
+  if ((found[1] === '--community' || found[1] === 'MSFS_COMMUNITY') && COMMUNITY !== savedCommunity()) {
+    try {
+      fs.mkdirSync(path.dirname(SAVED), { recursive: true });
+      fs.writeFileSync(SAVED, JSON.stringify({ community: COMMUNITY }, null, 2) + '\n');
+    } catch {}
+  }
 }
 const target = path.join(COMMUNITY, PKG);
 
@@ -219,4 +257,5 @@ if (!fs.existsSync(dist)) {
 }
 fs.rmSync(target, { recursive: true, force: true });
 fs.cpSync(dist, target, { recursive: true });
+remember();
 console.log(`Installed ${target} (Community folder: ${found[1]})\nRestart MSFS for it to take effect.`);

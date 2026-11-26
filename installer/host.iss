@@ -185,6 +185,7 @@ end;
 // the sim's real Community folder: the hook goes there, never into the library.
 var
   CommunityPage: TInputDirWizardPage;
+  KeptUnchecked: Boolean; // the Community folder was kept although setup could not check it
 
 // A folder the normal user can open. Setup may run elevated ("as administrator"), and an elevated
 // process can be refused a Store app's folder that the user (and Explorer) opens fine, so a folder
@@ -325,6 +326,12 @@ begin
   C[4] := ExpandConstant('{localappdata}\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community');
   C[5] := ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\Packages\Community');
   Store := StoreOnly;
+  // The saved folder is the user's choice: offered even when setup cannot check it (NextButtonClick asks).
+  if (C[0] <> '') and not (Store and IsSteamPath(C[0])) then
+  begin
+    Result := C[0];
+    Exit;
+  end;
   Result := '';
   for I := 0 to 5 do
     if (C[I] <> '') and not (Store and IsSteamPath(C[I])) and FolderOk(C[I]) then
@@ -364,14 +371,28 @@ begin
   StringChangeEx(V, '"', '', True);
   V := RemoveBackslashUnlessRoot(Trim(V));
   CommunityPage.Values[0] := V;
+  KeptUnchecked := False;
   if not FolderOk(V) then
   begin
-    MsgBox('Setup cannot find or open this folder:' + #13#10 + V + #13#10#13#10 +
-           'Copy the path from the address bar of Explorer showing your Community folder. ' +
-           'If Explorer opens it but setup does not, start setup normally (not "Run as administrator").',
-           mbError, MB_OK);
-    Result := False;
+    // Keep it anyway: the user may know better (setup can be refused a folder Explorer opens).
+    if MsgBox('Setup cannot find or open this folder:' + #13#10 + V + #13#10#13#10 +
+              'Use it anyway? Setup remembers it, but may not be able to install the hook there; ' +
+              'you can then copy the hook in yourself (CockpitCast''s monitor > Troubleshooting).' + #13#10#13#10 +
+              'No: go back and choose another folder (copy the path from Explorer''s address bar).',
+              mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      KeptUnchecked := True
+    else
+      Result := False;
   end;
+end;
+
+// Remember Dir as the Community folder without installing (install-hook --save-only), as the original user.
+procedure RememberCommunity(const Dir: String);
+var
+  Code: Integer;
+begin
+  ExecAsOriginalUser(ExpandConstant('{app}\node\node.exe'), '"' + ExpandConstant('{app}\hook\install-hook.mjs') + '" --community "' + Dir + '" --save-only',
+                     ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
 // Runs hook\setup-hook.mjs with Extra arguments; its exit code (-1 if it could not start).
@@ -402,6 +423,9 @@ begin
     // A trailing backslash would escape the closing quote ("E:" as a drive root).
     if (Dir <> '') and (Dir[Length(Dir)] = '') then
       Dir := Dir + '.';
+    // A folder kept although setup could not check it: remember it first (a failed install saves nothing).
+    if KeptUnchecked and (Dir <> '') then
+      RememberCommunity(Dir);
     if Dir <> '' then
       Code := SetupHook(' --community "' + Dir + '"')
     else
@@ -409,7 +433,7 @@ begin
     // 3: no Community folder found (a silent update, and the folder is gone). Ask for it; the hook
     // remembers the answer. Also during CockpitCast's own updates: someone clicked Install update.
     Dir := '';
-    while (Code = 3) and
+    while (Code = 3) and not KeptUnchecked and
           BrowseForFolder('MSFS 2024''s Community folder was not found. Choose the Community folder the sim ' +
                           'loads add-ons from (for example E:\MSFS2024\Community). If you use Addons Linker ' +
                           'or moved your add-ons, pick the folder the sim reads them from.', Dir, False) do
@@ -423,7 +447,8 @@ begin
     begin
       LoadStringFromFile(ExpandConstant('{localappdata}\CockpitCast\logs\hook-setup.log'), Log);
       MsgBox('The Community hook could not be installed:' + #13#10#13#10 + String(Log) + #13#10 +
-             'CockpitCast is installed. Fix the problem above, then run "Repair Community hook" from the Start menu.',
+             'CockpitCast is installed and remembers your Community folder. Fix the problem above, then run ' +
+             '"Repair Community hook" from the Start menu, or copy the hook in yourself (CockpitCast''s monitor > Troubleshooting).',
              mbError, MB_OK);
     end;
   end;

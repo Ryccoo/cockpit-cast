@@ -96,6 +96,18 @@
     <p>Only one add-on can replace the sim file the hook uses. If the output names another package that "also replaces BaseInstrument.js", move that package out of the Community folder (or untick it in Addons Linker) and run the command again.</p>
   </details>
 
+  <details id="tManual">
+    <summary>Nothing helps? Copy the hook into the Community folder yourself</summary>
+    <p>If Explorer opens your Community folder but CockpitCast can't install into it, put the hook there by hand:</p>
+    <ol>
+      <li>Close MSFS. <button id="btnBuildHook" type="button">Build the hook</button> (from your sim's files; a few seconds) <span id="buildHookMsg" class="dim"></span></li>
+      <li><button id="btnOpenBuilt" type="button">Show it in Explorer</button>: the folder <code>zzz-cockpitcast-hook</code> is selected.</li>
+      <li>Copy that folder into your Community folder (replace it if it's already there).</li>
+      <li>Start MSFS and load a flight. After every MSFS update, do this again: CockpitCast warns when the hook is outdated.</li>
+    </ol>
+    <p>So CockpitCast keeps that folder for the future, enter it in the editor's <a href="/editor#addon">Sim add-on</a> tab and press <b>Save</b>.</p>
+  </details>
+
   <details>
     <summary>Which Community folder does MSFS use?</summary>
     <p>The Steam version keeps add-ons in <code>%APPDATA%\Microsoft Flight Simulator 2024\Packages\Community</code>, the MS Store / Xbox app version in <code>%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community</code>, unless the packages folder was moved when the sim was installed. The sim's settings file names the real one: its <code>InstalledPackagesPath</code> line, plus <code>\Community</code>. This shows it for both versions:</p>
@@ -248,6 +260,20 @@ function renderTrouble() {
   ].join('\n');
 }
 document.getElementById('tFolder').oninput = renderTrouble;
+async function hookPost(url, msgId, busyText) {
+  const msg = document.getElementById(msgId);
+  msg.textContent = busyText || '';
+  try {
+    const r = await fetch(url, { method: 'POST' });
+    if (r.status === 403) return void (msg.textContent = 'Only on the sim PC itself (this page is open from another computer).');
+    const j = await r.json().catch(() => ({}));
+    msg.textContent = j.error ? j.error : j.ok === false ? `Failed: ${j.output || 'see the logs'}` : j.folder && busyText ? 'Built.' : '';
+  } catch (e) {
+    msg.textContent = e.message;
+  }
+}
+document.getElementById('btnBuildHook').onclick = () => hookPost('/api/hook-setup/build', 'buildHookMsg', 'Building\u2026');
+document.getElementById('btnOpenBuilt').onclick = () => hookPost('/api/hook-setup/open-built', 'buildHookMsg');
 document.getElementById('btnOpenLogs').onclick = async () => {
   const msg = document.getElementById('openLogsMsg');
   try {
