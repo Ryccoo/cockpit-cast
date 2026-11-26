@@ -94,6 +94,29 @@ be built with a higher version (host/package.json, client/pubspec.yaml and clien
 - The version is in three places: `host/package.json`, `client/pubspec.yaml` and `client/lib/about.dart`
   (`appVersion`, which the client's updater compares). The release workflow refuses a tag that differs.
 
+## Android test builds
+
+The Android app is not published with the releases; it is planned for the Play Store. The release
+workflow builds it on every run, signed with the upload key:
+- **APK:** for testing on your own devices.
+- **App bundle (`.aab`):** for the Play Store.
+
+Both go into an encrypted `CockpitCast-Client-android.7z` on the run's page (Artifacts, kept 30 days).
+Its password is the keystore password. Workflow artifacts of a public repo can be downloaded by any
+signed-in GitHub user, which is why they're encrypted.
+
+**Run workflow** on the Actions tab builds everything as a test and publishes nothing. Only a
+version tag publishes a release.
+
+Signing:
+- **CI:** repository secrets `ANDROID_KEYSTORE_BASE64` (the `.jks` file, base64) and
+  `ANDROID_KEYSTORE_PASSWORD`; the key alias is `upload`. Without them the app is built but not uploaded.
+- **Local:** `client/android/key.properties` (git-ignored) with `storeFile=`, `storePassword=` and
+  `keyAlias=upload`. Without it, release builds use the debug key.
+- **The key:** this is the Play Store *upload* key. With Play App Signing, Google signs the published
+  app, and a lost upload key can be reset through Play Console support. Keep a backup of the `.jks`
+  and its password anyway.
+
 ## Logs and state
 
 | What | Where |

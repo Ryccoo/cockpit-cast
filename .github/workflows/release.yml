@@ -4,6 +4,8 @@
 #   CockpitCast-Client-linux-x64.tar.gz   Linux PCs
 #   CockpitCast-Client-linux-arm64.tar.gz Raspberry Pi 4/5 (64-bit OS)
 #   SHA256SUMS.txt                        checksums (the updater checks downloads against them)
+# It also builds the Android app (APK and Play Store bundle) as a test artifact of the run, not
+# attached to the release (see the android job).
 # The file names have no version in them, so .../releases/latest/download/<name> always gets the latest.
 # The tag must match the version in host/package.json, client/pubspec.yaml and client/lib/about.dart.
 name: Release
@@ -105,15 +107,76 @@ jobs:
           name: linux-${{ matrix.arch }}
           path: dist/*
 
+  # Android test build for our own devices, NOT attached to the release: the Android app is planned for
+  # the Play Store. Signed with the upload key from the secrets ANDROID_KEYSTORE_BASE64 and
+  # ANDROID_KEYSTORE_PASSWORD (alias "upload"). Artifacts of a public repo can be downloaded by any
+  # signed-in GitHub user, so the APK and bundle are uploaded only inside a 7z archive encrypted with
+  # the keystore password; without the secrets nothing is uploaded (the job still checks that it builds).
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: Upload key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::warning::No upload key in the secrets: the Android app is only built, not uploaded."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=upload" >> "$GITHUB_ENV"
+      - name: Build (APK for testing, app bundle for the Play Store)
+        working-directory: client
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+      - name: Pack (encrypted)
+        if: env.ANDROID_KEYSTORE_PATH != ''
+        run: |
+          mkdir -p pack dist
+          cp client/build/app/outputs/flutter-apk/app-release.apk pack/CockpitCast-Client-android.apk
+          cp client/build/app/outputs/bundle/release/app-release.aab pack/CockpitCast-Client-android.aab
+          7z a -t7z -mhe=on "-p$ANDROID_KEYSTORE_PASSWORD" dist/CockpitCast-Client-android.7z ./pack/*
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"
+      - uses: actions/upload-artifact@v7
+        if: env.ANDROID_KEYSTORE_PATH != ''
+        with:
+          name: android-test
+          path: dist/CockpitCast-Client-android.7z
+          retention-days: 30
+
   release:
     needs: [version, windows, linux]
     # The Windows build is required; a failed Linux build only leaves its file out.
-    # (Android and iOS apps are not released here: they are planned for the app stores.)
-    if: ${{ !cancelled() && needs.windows.result == 'success' }}
+    # Android is built above as a test artifact only and is not attached here (planned for the Play
+    # Store), so only the Windows and Linux artifacts are downloaded.
+    # Only for a version tag: a manual run (Run workflow) just builds, as a test, and publishes nothing.
+    if: ${{ !cancelled() && needs.windows.result == 'success' && github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
         with:
+          name: windows
+          path: dist
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: linux-*
           path: dist
           merge-multiple: true
       - name: Checksums
