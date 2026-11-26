@@ -67,7 +67,8 @@ const candidates = [
   [asCommunity(process.env.MSFS_COMMUNITY), 'MSFS_COMMUNITY'],
   [savedCommunity(), `saved in ${SAVED}`],
   ...fromUserCfg().map((p) => [p, 'InstalledPackagesPath in UserCfg.opt']),
-  [path.join(process.env.APPDATA ?? '', 'Microsoft Flight Simulator 2024', 'Packages', 'Community'), 'default location'],
+  [path.join(process.env.APPDATA ?? '', 'Microsoft Flight Simulator 2024', 'Packages', 'Community'), 'default location, Steam'],
+  [path.join(process.env.LOCALAPPDATA ?? '', 'Packages', 'Microsoft.Limitless_8wekyb3d8bbwe', 'LocalCache', 'Packages', 'Community'), 'default location, MS Store'],
 ].filter(([p]) => p);
 
 // An explicitly named folder must exist: falling back to another one would install where the user did not ask.
