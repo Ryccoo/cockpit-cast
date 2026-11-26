@@ -323,6 +323,23 @@ Open `http://<sim PC>:8800/editor` in a browser. It is also linked from the moni
 Airspeed arcs come from the sim (stall speeds, Vne). The sim has no values for Vfe and Vno: these come from
 aircraft profiles in `host/defaults/aircraft.json` and are estimated when an aircraft is not listed.
 
+## Local screens (displays on the sim PC itself)
+
+Monitors connected to the sim PC can show screens without the display app: in the editor's **Screens**
+tab, set a screen's **On this PC** to a monitor and its **Area** to the whole monitor or a half (left,
+right, top, bottom). Each screen is a borderless window, so for example the PFD on the left half and
+the MFD on the right half of one small monitor. The host's viewer (`cockpitcast-screens.exe`) draws
+glass displays straight from the sim's graphics memory: capture.dll copies each display into shared GPU
+textures, with no JPEG, no network and no second app on the graphics card's busy path.
+
+- **Show local screens** in the tray menu, or **Local screens: on/off** in the Screens tab, turns them
+  all on or off at once, keeping their monitors and areas.
+- An empty screen shows its name and why (waiting for MSFS, waiting for the display).
+- Steam-gauge layouts are not drawn by the local viewer yet: use the display app for those.
+- The monitors must be on the same graphics card as the sim. Tip: turn off "Show my taskbar on all
+  displays" (Windows Settings > Personalization > Taskbar) so the taskbar does not cover a cockpit
+  monitor.
+
 ## Other aircraft and displays
 
 CockpitCast learns glass displays by itself. Whenever you load an aircraft, the hook tells the host which
