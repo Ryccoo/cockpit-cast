@@ -6,7 +6,7 @@
 ; is a setting in the app itself.
 
 #ifndef AppVersion
-  #define AppVersion "0.2.5-beta.1"
+  #define AppVersion "0.2.5-beta.2"
 #endif
 
 [Setup]
