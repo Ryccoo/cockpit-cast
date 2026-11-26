@@ -25,7 +25,7 @@ import { SIMVARS } from './simvars.mjs';
 import { advertise } from './discovery.mjs';
 import { Tray } from './tray.mjs';
 import { Updater } from './updater.mjs';
-import { HookSetup } from './hookSetup.mjs';
+import { HookSetup, isElevated } from './hookSetup.mjs';
 import { logToConsole, logToFile, makeLog } from './log.mjs';
 
 const cfg = loadConfig();
@@ -64,7 +64,14 @@ const dataSource = cfg.fakeData ? new FakeData() : sim;
 
 // Sent to client apps (keep small: it is broadcast on every change).
 const updater = new Updater({ cfg, version });
-const getStatus = () => ({ sim: sim.status(), capture: { ...capture.status(), injector: injector.status().state }, hook: hook.status(), update: updater.info() });
+// Running as administrator: some folders (a Store app's Community folder) can then be refused. Warned
+// about in the log, the monitor and the editor's Sim add-on tab.
+let elevated = false;
+isElevated().then((e) => {
+  elevated = e;
+  if (e) log.warn('running as administrator: start CockpitCast normally (not "Run as administrator"); an elevated copy can be refused the sim\'s Community folder');
+});
+const getStatus = () => ({ sim: sim.status(), capture: { ...capture.status(), injector: injector.status().state }, hook: hook.status(), update: updater.info(), elevated });
 // Extra detail for /api/status only.
 const getDetail = () => ({
   injector: injector.status(),

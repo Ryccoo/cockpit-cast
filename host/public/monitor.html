@@ -42,6 +42,7 @@
   <span class="pill" title="The CockpitCast host this page talks to">host <b id="host">…</b></span>
   <span class="pill" title="The version of CockpitCast running on the sim PC, and whether a newer one is out">version <b id="ver">…</b></span>
   <label class="pill" id="betaBox" style="display:none;cursor:pointer" title="Also offer beta versions: test versions published before a release, for testers. Off: normal releases only. A beta updates to its release by itself."><input type="checkbox" id="beta" style="vertical-align:-2px"> beta versions</label>
+  <span class="pill" id="adminWarn" style="display:none" title="CockpitCast was started as administrator. It can then be refused folders you can open, such as the MS Store sim's Community folder. Quit it from the tray icon and start it normally from the Start menu."><b class="bad">running as administrator</b></span>
   <span class="pill" title="This page's own connection to the host (not the sim)">this page <b id="link" class="bad">connecting</b></span>
   <span class="pill" title="MSFS, via SimConnect: running, in a flight, which aircraft">sim <b id="sim">?</b></span>
   <span class="pill" title="capture.dll inside the sim (loaded about 10 s after a flight is live)">capture <b id="cap">?</b></span>
@@ -95,6 +96,7 @@ function onText(m) {
       document.getElementById('betaBox').style.display = local ? '' : 'none';
       document.getElementById('beta').checked = !!u.beta;
     }
+    document.getElementById('adminWarn').style.display = m.elevated ? '' : 'none';
     const s = m.sim;
     setText('sim', !s.connected ? 'not running' : s.inFlight ? (s.paused ? 'paused' : 'in flight') + (s.aircraft ? ` · ${s.aircraft}` : '') : 'menu', s.connected && s.inFlight);
     setText('cap', m.capture.connected ? m.capture.source : 'none', m.capture.connected);

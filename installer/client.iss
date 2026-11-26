@@ -55,10 +55,10 @@ Name: "{group}\Uninstall CockpitCast Client"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\CockpitCast Client"; Filename: "{app}\cockpitcast.exe"; Tasks: desktop
 
 [Run]
-Filename: "{app}\cockpitcast.exe"; Description: "Start CockpitCast Client now"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\cockpitcast.exe"; Description: "Start CockpitCast Client now"; Flags: postinstall nowait skipifsilent runasoriginaluser
 ; Updates from the app itself (/SILENT /UPDATE=1 /ARGS="<its command line>"; client/lib/updater.dart):
 ; start it again, as it was started.
-Filename: "{app}\cockpitcast.exe"; Parameters: "{param:ARGS|}"; Flags: nowait; Check: IsUpdate
+Filename: "{app}\cockpitcast.exe"; Parameters: "{param:ARGS|}"; Flags: nowait runasoriginaluser; Check: IsUpdate
 
 [Code]
 // Started by the app's own updater.

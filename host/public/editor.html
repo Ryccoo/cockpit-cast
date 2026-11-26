@@ -820,7 +820,9 @@ $('btnScreens').onclick = () => {
 };
 
 // ---- sim add-on tab: the Community hook (host/src/hookSetup.mjs; local-only API) ----
-let hookInfo = null, hookDirTouched = false, hookTimer = null, hookReinstalling = false;
+// hookResult: the last reinstall's message and output. It stays until the next click (status refreshes
+// every 5 s and must not wipe it). The folder field keeps what was typed until a reinstall succeeds.
+let hookInfo = null, hookDirTouched = false, hookTimer = null, hookReinstalling = false, hookResult = null;
 async function loadHookStatus() {
   try {
     const r = await fetch('/api/hook-setup', { cache: 'no-store' });
@@ -840,43 +842,56 @@ function renderHookRemote() {
 function renderHook() {
   const h = hookInfo || {};
   const row = (k, v) => `<div class="k">${k}</div><div>${v}</div>`;
-  const installed = !h.community ? 'â€”' : !h.installed ? '<span class="bad">no</span>'
+  const installed = !h.community ? '\u2014' : !h.installed ? '<span class="bad">no</span>'
     : `yes${h.installedVersion ? `, version ${esc(h.installedVersion)}` : ''}${h.builtAt ? `<div class="sub">built ${esc(new Date(h.builtAt).toLocaleString())}</div>` : ''}`;
   const stale = h.installed && h.installedVersion && h.hostVersion && h.installedVersion !== h.hostVersion;
   const sim = !h.simRunning ? 'not running'
     : h.inSim?.connected ? `running, the hook is active${h.inSim.versions?.length ? ` (version ${esc(h.inSim.versions.join(', '))})` : ''}`
-    : 'running; the hook has not reported yet (not installed, or no flight loaded)';
-  $('hookStatus').innerHTML = (h.error ? `<div class="err">${esc(h.error)}</div>` : '') + '<div class="kv">'
+    : 'running; the hook has not reported yet. No flight loaded, or MSFS reads a different Community folder than the one above.';
+  $('hookStatus').innerHTML = (h.error ? `<div class="err">${esc(h.error)}</div>` : '')
+    + (h.elevated ? '<div class="hint warn"><b>CockpitCast is running as administrator.</b> It can then be refused folders you can open (such as the MS Store sim\'s Community folder). Quit it from the tray icon and start it normally from the Start menu.</div>' : '')
+    + '<div class="kv">'
     + row('Community folder', h.community ? `${esc(h.community)}<div class="sub">found via: ${esc(h.from)}</div>` : '<span class="bad">not found: enter it below</span>')
     + row('Hook installed', installed + (stale ? `<div class="sub warn">Not the same version as CockpitCast ${esc(h.hostVersion)}: reinstall it.</div>` : ''))
     + row('MSFS', sim)
     + '</div>';
   $('hookDir').disabled = false;
   if (!hookDirTouched) $('hookDir').value = h.community || '';
-  $('hookTriedList').innerHTML = (h.tried || []).map((t) => `<div>${t.exists ? 'âœ“' : 'âœ—'} ${esc(t.path)} <span class="sub">(${esc(t.from)})</span></div>`).join('') || '<div class="sub">â€”</div>';
-  $('btnHookReinstall').disabled = !!h.simRunning || !!h.busy;
-  if (!hookReinstalling) $('hookMsg').textContent = h.simRunning ? 'Close MSFS to reinstall: it loads Community add-ons only when it starts.' : h.busy ? 'Reinstallingâ€¦' : '';
-  $('hookMsg').className = 'hint' + (h.simRunning ? ' warn' : '');
+  const mark = (t) => (t.skipped ? '\u2013' : t.access === 'ok' ? '\u2713' : t.access === 'denied' ? '\u26d4' : '\u2717');
+  const note = (t) => (t.access === 'denied' ? '; exists, but CockpitCast may not open it' : '');
+  $('hookTriedList').innerHTML = (h.tried || []).map((t) => `<div>${mark(t)} ${esc(t.path)} <span class="sub">(${esc(t.from + note(t))})</span></div>`).join('') || '<div class="sub">\u2014</div>';
+  $('btnHookReinstall').disabled = !!h.simRunning || !!h.busy || hookReinstalling;
+  // Message: a running reinstall, else the last result (kept), else why the button is off.
+  const msg = hookReinstalling ? null
+    : hookResult ? hookResult
+    : h.simRunning ? { text: `MSFS is still running (${'FlightSimulator2024.exe'}). Close it, or end it in Task Manager, to reinstall: it loads Community add-ons only when it starts.`, warn: true }
+    : h.busy ? { text: 'Reinstalling\u2026' } : { text: '' };
+  if (msg) {
+    $('hookMsg').textContent = msg.text;
+    $('hookMsg').className = 'hint' + (msg.warn ? ' warn' : '');
+  }
 }
 $('hookDir').oninput = () => { hookDirTouched = true; };
-$('btnHookRefresh').onclick = () => { hookDirTouched = false; loadHookStatus(); };
+$('btnHookRefresh').onclick = () => { hookDirTouched = false; hookResult = null; $('hookOut').textContent = ''; loadHookStatus(); };
 $('btnHookReinstall').onclick = async () => {
   hookReinstalling = true;
+  hookResult = null;
   $('btnHookReinstall').disabled = true;
   $('hookMsg').className = 'hint';
-  $('hookMsg').textContent = "Rebuilding the hook from your sim's files and installing itâ€¦";
+  $('hookMsg').textContent = "Rebuilding the hook from your sim's files and installing it\u2026";
   $('hookOut').textContent = '';
+  let ok = false;
   try {
     const r = await fetch('/api/hook-setup/reinstall', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ community: $('hookDir').value.trim() }) });
-    const j = await r.json();
+    const j = await r.json().catch(() => ({ ok: false, error: `The host answered ${r.status}` }));
+    ok = !!j.ok;
     $('hookOut').textContent = j.output || '';
-    $('hookMsg').textContent = j.ok ? 'Installed. Start MSFS (or restart it) to load it.' : j.error || 'The hook is not installed: see below.';
-    $('hookMsg').className = 'hint' + (j.ok ? '' : ' warn');
+    hookResult = ok ? { text: 'Installed. Start MSFS (or restart it) to load it.' } : { text: j.error || 'The hook is not installed: see the output below.', warn: true };
   } catch (e) {
-    $('hookMsg').textContent = e.message;
+    hookResult = { text: e.message, warn: true };
   }
   hookReinstalling = false;
-  hookDirTouched = false;
+  if (ok) hookDirTouched = false; // show the folder it went into; after a failure keep what was typed
   loadHookStatus();
 };
 

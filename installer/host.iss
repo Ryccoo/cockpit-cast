@@ -74,9 +74,11 @@ Name: "{group}\Uninstall CockpitCast"; Filename: "{uninstallexe}"
 Name: "{userstartup}\CockpitCast"; Filename: "{app}\cockpitcast.exe"; Tasks: startup
 
 [Run]
-Filename: "{app}\cockpitcast.exe"; Description: "Start CockpitCast now"; Flags: postinstall nowait skipifsilent
+; runasoriginaluser: even if setup was started "as administrator", CockpitCast runs as the normal user
+; (an elevated CockpitCast can be refused the MS Store sim's Community folder).
+Filename: "{app}\cockpitcast.exe"; Description: "Start CockpitCast now"; Flags: postinstall nowait skipifsilent runasoriginaluser
 ; Updates from CockpitCast itself (/SILENT /UPDATE=1; host/src/updater.mjs): start it again when done.
-Filename: "{app}\cockpitcast.exe"; Flags: nowait; Check: IsUpdate
+Filename: "{app}\cockpitcast.exe"; Flags: nowait runasoriginaluser; Check: IsUpdate
 
 [UninstallRun]
 Filename: "{app}\node\node.exe"; Parameters: """{app}\hook\install-hook.mjs"" --remove"; WorkingDir: "{app}"; Flags: runhidden; RunOnceId: "RemoveHook"
@@ -183,6 +185,33 @@ end;
 var
   CommunityPage: TInputDirWizardPage;
 
+// A folder the normal user can open. Setup may run elevated ("as administrator"), and an elevated
+// process can be refused a Store app's folder that the user (and Explorer) opens fine, so a folder
+// setup cannot see is checked again as the original user.
+function FolderOk(P: String): Boolean;
+var
+  Code: Integer;
+begin
+  P := RemoveBackslashUnlessRoot(Trim(P));
+  Result := (P <> '') and DirExists(P);
+  if not Result and (P <> '') then
+    Result := ExecAsOriginalUser(ExpandConstant('{cmd}'), '/c if exist "' + AddBackslash(P) + '" (exit 0) else (exit 1)', '',
+                                 SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
+// Only the MS Store version is installed: its package folder exists and the Steam version's UserCfg.opt
+// does not. Steam-style folders (also a remembered one) are then leftovers (as in hook\install-hook.mjs).
+function StoreOnly: Boolean;
+begin
+  Result := FolderOk(ExpandConstant('{localappdata}\Packages\Microsoft.Limitless_8wekyb3d8bbwe')) and
+            not FileExists(ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\UserCfg.opt'));
+end;
+
+function IsSteamPath(const P: String): Boolean;
+begin
+  Result := Pos(Lowercase(ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\')), Lowercase(P)) = 1;
+end;
+
 // %LOCALAPPDATA%\CockpitCast\hook.json: { "community": "C:\\...\\Community" }
 function SavedCommunity: String;
 var
@@ -286,16 +315,18 @@ function DetectCommunity: String;
 var
   C: array[0..5] of String;
   I: Integer;
+  Store: Boolean;
 begin
   C[0] := SavedCommunity;
   C[1] := AddonsLinkerCommunity;
-  C[2] := UserCfgCommunity(ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\UserCfg.opt'));
-  C[3] := UserCfgCommunity(ExpandConstant('{localappdata}\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\UserCfg.opt'));
-  C[4] := ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\Packages\Community');
-  C[5] := ExpandConstant('{localappdata}\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community');
+  C[2] := UserCfgCommunity(ExpandConstant('{localappdata}\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\UserCfg.opt'));
+  C[3] := UserCfgCommunity(ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\UserCfg.opt'));
+  C[4] := ExpandConstant('{localappdata}\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community');
+  C[5] := ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\Packages\Community');
+  Store := StoreOnly;
   Result := '';
   for I := 0 to 5 do
-    if (C[I] <> '') and DirExists(C[I]) then
+    if (C[I] <> '') and not (Store and IsSteamPath(C[I])) and FolderOk(C[I]) then
     begin
       Result := C[I];
       Exit;
@@ -308,7 +339,8 @@ begin
     'The hook is a small add-on for MSFS 2024. It goes into the folder MSFS loads add-ons from: its Community folder. ' +
     'Setup filled in the folder it found; check it, or choose another.' + #13#10#13#10 +
     'Using MSFS Addons Linker, or keeping add-ons on another drive? Choose the Community folder set in its options ' +
-    '(where it puts the links), not your add-ons library: MSFS does not read the library.',
+    '(where it puts the links), not your add-ons library: MSFS does not read the library.' + #13#10#13#10 +
+    'Browse does not show hidden folders such as AppData: paste the path instead (copy it from Explorer''s address bar).',
     False, '');
   CommunityPage.Add('Community folder:');
   CommunityPage.Values[0] := DetectCommunity;
@@ -320,19 +352,33 @@ begin
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  V: String;
 begin
   Result := True;
-  if (CurPageID = CommunityPage.ID) and ((Trim(CommunityPage.Values[0]) = '') or not DirExists(CommunityPage.Values[0])) then
+  if CurPageID <> CommunityPage.ID then
+    Exit;
+  // Windows' "Copy as path" adds quotes; spaces around the path are never part of it.
+  V := CommunityPage.Values[0];
+  StringChangeEx(V, '"', '', True);
+  V := RemoveBackslashUnlessRoot(Trim(V));
+  CommunityPage.Values[0] := V;
+  if not FolderOk(V) then
   begin
-    MsgBox('That folder does not exist. Choose the Community folder MSFS 2024 loads add-ons from.', mbError, MB_OK);
+    MsgBox('Setup cannot find or open this folder:' + #13#10 + V + #13#10#13#10 +
+           'Copy the path from the address bar of Explorer showing your Community folder. ' +
+           'If Explorer opens it but setup does not, start setup normally (not "Run as administrator").',
+           mbError, MB_OK);
     Result := False;
   end;
 end;
 
 // Runs hook\setup-hook.mjs with Extra arguments; its exit code (-1 if it could not start).
+// As the original user: even when setup runs elevated, the hook is built and copied with the same
+// rights as Explorer (an elevated process can be refused the MS Store sim's Community folder).
 function SetupHook(const Extra: String): Integer;
 begin
-  if not Exec(ExpandConstant('{app}\node\node.exe'), '"' + ExpandConstant('{app}\hook\setup-hook.mjs') + '"' + Extra,
+  if not ExecAsOriginalUser(ExpandConstant('{app}\node\node.exe'), '"' + ExpandConstant('{app}\hook\setup-hook.mjs') + '"' + Extra,
               ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Result) then
     Result := -1;
 end;

@@ -16,6 +16,13 @@
 // that Community folder as a normal folder, never into the library (the sim does not read the library).
 // installer/host.iss looks for the folder in the same order (DetectCommunity) to fill in its page.
 //
+// Steam and MS Store versions keep add-ons in different places. When only the MS Store version is
+// installed (its package folder exists, the Steam version's UserCfg.opt does not), Steam-style folders,
+// including a remembered one, are leftovers: they are skipped, and MS Store folders come first. A folder
+// named with --community or MSFS_COMMUNITY is always used as given.
+// Folder checks tell "not there" from "not allowed in": an elevated or restricted CockpitCast can be
+// refused a Store app's folder that Explorer opens fine.
+//
 // Only one package can override BaseInstrument.js at a time. If another Community package
 // overrides it too, this refuses unless --force is given.
 
@@ -42,6 +49,26 @@ function asCommunity(dir) {
   const inner = path.join(dir, 'Community');
   return path.basename(dir).toLowerCase() !== 'community' && fs.existsSync(inner) ? inner : dir;
 }
+
+// 'ok' (a folder we can open), 'denied' (there, but we may not open it), 'missing'.
+function probe(p) {
+  try {
+    if (!fs.statSync(p).isDirectory()) return 'missing';
+    fs.opendirSync(p).closeSync(); // listing it, as installing does (stat alone can pass where listing is refused)
+    return 'ok';
+  } catch (e) {
+    return e.code === 'EPERM' || e.code === 'EACCES' ? 'denied' : 'missing';
+  }
+}
+const DENIED =
+  'CockpitCast is not allowed to open this folder (it exists). Is CockpitCast or setup running as administrator,\n' +
+  'or blocked by security software? Start it normally (not "Run as administrator") and try again.';
+
+// Which versions of the sim are installed (see above).
+const STEAM_ROOT = path.join(process.env.APPDATA ?? '', 'Microsoft Flight Simulator 2024');
+const STORE_ROOT = path.join(process.env.LOCALAPPDATA ?? '', 'Packages', 'Microsoft.Limitless_8wekyb3d8bbwe');
+const storeOnly = probe(STORE_ROOT) !== 'missing' && !fs.existsSync(path.join(STEAM_ROOT, 'UserCfg.opt'));
+const isSteamPath = (p) => !!p && path.resolve(p).toLowerCase().startsWith(STEAM_ROOT.toLowerCase() + path.sep);
 
 function savedCommunity() {
   try {
@@ -82,54 +109,68 @@ function fromAddonsLinker() {
 
 // The Community folder sits in the sim's packages folder (InstalledPackagesPath in UserCfg.opt), which
 // the user picks at install time. UserCfg.opt is in a different place for the Steam and MS Store versions.
+// [folder, version] for the MS Store version first, then Steam.
 function fromUserCfg() {
   const out = [];
   const cfgs = [
-    path.join(process.env.APPDATA ?? '', 'Microsoft Flight Simulator 2024', 'UserCfg.opt'), // Steam
-    path.join(process.env.LOCALAPPDATA ?? '', 'Packages', 'Microsoft.Limitless_8wekyb3d8bbwe', 'LocalCache', 'UserCfg.opt'), // MS Store
+    [path.join(STORE_ROOT, 'LocalCache', 'UserCfg.opt'), 'MS Store'],
+    [path.join(STEAM_ROOT, 'UserCfg.opt'), 'Steam'],
   ];
-  for (const f of cfgs) {
+  for (const [f, version] of cfgs) {
     try {
       const m = /^\s*InstalledPackagesPath\s+"([^"]+)"/m.exec(fs.readFileSync(f, 'utf8'));
-      if (m) out.push(path.join(m[1], 'Community'));
+      if (m) out.push([path.join(m[1], 'Community'), version]);
     } catch {}
   }
   return out;
 }
 
-// Each candidate with where it came from, in order.
-const candidates = [
+// Each candidate with where it came from, in order. Steam-style folders when only the MS Store version is
+// installed are listed as skipped.
+const named = [
   [asCommunity(given), '--community'],
   [asCommunity(process.env.MSFS_COMMUNITY), 'MSFS_COMMUNITY'],
+].filter(([p]) => p);
+const found_ = [
   [savedCommunity(), `saved in ${SAVED}`],
   ...fromAddonsLinker().map((p) => [p, 'MSFS Addons Linker setting']),
-  ...fromUserCfg().map((p) => [p, 'InstalledPackagesPath in UserCfg.opt']),
-  [path.join(process.env.APPDATA ?? '', 'Microsoft Flight Simulator 2024', 'Packages', 'Community'), 'default location, Steam'],
-  [path.join(process.env.LOCALAPPDATA ?? '', 'Packages', 'Microsoft.Limitless_8wekyb3d8bbwe', 'LocalCache', 'Packages', 'Community'), 'default location, MS Store'],
+  ...fromUserCfg().map(([p, v]) => [p, `InstalledPackagesPath in UserCfg.opt (${v})`]),
+  [path.join(STORE_ROOT, 'LocalCache', 'Packages', 'Community'), 'default location, MS Store'],
+  [path.join(STEAM_ROOT, 'Packages', 'Community'), 'default location, Steam'],
 ].filter(([p]) => p);
+const skipped = storeOnly ? found_.filter(([p]) => isSteamPath(p)) : [];
+const candidates = [...named, ...found_.filter((c) => !skipped.includes(c))];
+const firstOk = () => candidates.find(([p]) => probe(p) === 'ok');
 
 // --detect: report and change nothing (the editor's Sim add-on tab, setup's folder page).
 if (args.has('--detect')) {
-  const found = candidates.find(([p]) => fs.existsSync(p));
+  const found = firstOk();
   console.log(JSON.stringify({
     community: found?.[0] ?? null,
     from: found?.[1] ?? null,
     installed: !!found && fs.existsSync(path.join(found[0], PKG)),
-    tried: candidates.map(([p, from]) => ({ path: p, from, exists: fs.existsSync(p) })),
+    storeOnly,
+    tried: [
+      ...candidates.map(([p, from]) => ({ path: p, from, access: probe(p), exists: probe(p) !== 'missing' })),
+      ...skipped.map(([p, from]) => ({ path: p, from: `${from}; skipped: only the MS Store version is installed`, access: probe(p), exists: probe(p) !== 'missing', skipped: true })),
+    ],
   }));
   process.exit(0);
 }
 
 // An explicitly named folder must exist: falling back to another one would install where the user did not ask.
-if (given && !fs.existsSync(candidates[0][0])) {
-  console.error(`That folder does not exist: ${candidates[0][0]}`);
+const givenAccess = given ? probe(candidates[0][0]) : 'ok';
+if (givenAccess !== 'ok') {
+  console.error(givenAccess === 'denied' ? `${DENIED}\n  ${candidates[0][0]}` : `That folder does not exist: ${candidates[0][0]}`);
   process.exit(NOT_FOUND);
 }
-const found = candidates.find(([p]) => fs.existsSync(p));
+const found = firstOk();
 if (!found) {
+  const denied = candidates.filter(([p]) => probe(p) === 'denied');
   console.error(
     'MSFS 2024\'s Community folder was not found. Looked in:\n' +
-      candidates.map(([p, why]) => `  ${p}  (${why})`).join('\n') +
+      candidates.map(([p, why]) => `  ${p}  (${why}${probe(p) === 'denied' ? '; exists, but CockpitCast may not open it' : ''})`).join('\n') +
+      (denied.length ? `\n${DENIED}` : '') +
       '\nIf you moved your add-ons (for example with Addons Linker), choose the Community folder the sim\n' +
       'reads them from: run "Repair Community hook" from the Start menu, or pass --community <folder>.',
   );
