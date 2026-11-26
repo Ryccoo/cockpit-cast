@@ -12,6 +12,7 @@
   "main": "src/index.mjs",
   "scripts": {
     "start": "node src/index.mjs",
+    "test": "node --test --test-concurrency=1 \"test/*.test.mjs\"",
     "fake-capture": "node tools/fake-capture.mjs"
   },
   "engines": {

@@ -1,0 +1,45 @@
+# Tests on every push and pull request, and before every release (release.yml runs this first):
+#   host   node --test (host/test): the hook's Community folder rules, which screen shows what, the
+#          updater, and a real host started isolated (no sim) on a free port
+#   client flutter analyze and flutter test (client/test)
+# The C++ parts (capture.dll, injector, viewer, tray) and anything inside the sim are tested by hand.
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+
+env:
+  FLUTTER_VERSION: 3.50.1
+
+jobs:
+  host:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install
+        working-directory: host
+        run: npm ci --omit=dev
+      - name: Test
+        working-directory: host
+        run: npm test
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: Analyze
+        working-directory: client
+        run: flutter analyze
+      - name: Test
+        working-directory: client
+        run: flutter test

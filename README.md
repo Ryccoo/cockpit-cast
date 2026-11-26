@@ -409,10 +409,10 @@ keys. For example:
 | `injector/` | `cockpitcast-injector.exe` (C++), plus a fake sim and a test DLL |
 | `tray/` | `cockpitcast-tray.exe` (C++): the tray icon. `npm start` starts it; installed copies start the host from it (launcher, no console window) |
 | `site/` | The landing page (cockpitcast.ludvigh.dev), published by `.github/workflows/pages.yml` |
-| `.github/workflows/` | `release.yml` (builds installers and clients on a version tag), `pages.yml` (website), `cla.yml` (CLA bot) |
+| `.github/workflows/` | `tests.yml` (tests on every push and pull request), `release.yml` (runs the tests, then builds installers and clients on a version tag), `pages.yml` (website), `cla.yml` (CLA bot) |
 | `installer/` | Inno Setup scripts and `build.ps1`: builds the host and client installers and the portable client zip |
 | `hook/` | Community hook source; build and install scripts |
-| `host/` | Host (Node.js): `src/` modules, `public/` web pages, `tools/` test tools, `defaults/` layouts and aircraft profiles |
+| `host/` | Host (Node.js): `src/` modules, `public/` the CockpitCast window, `test/` automatic tests, `tools/` test tools, `defaults/` layouts and aircraft profiles |
 | `client/` | Client app (Flutter) |
 | `config/displays.json` | Built-in displays (ids, element tags, marker colours); more are learned at runtime |
 | `docs/` | `protocol.md` (all links), `markers.md`, `development.md` (testing without the sim), `screenshots.md` (images in `docs/images/`) |
@@ -429,8 +429,9 @@ keys. For example:
 
 ## Contributing
 
-Issues and pull requests are welcome. `docs/development.md` explains how to test every part without the
-sim. Ideas that need help: better primary-display guesses for more aircraft, more gauge types, and client setup
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). [AGENTS.md](AGENTS.md) holds
+the project's rules, code style and tests, for people and coding agents alike; `docs/development.md`
+explains how to test every part without the sim (`cd host && npm test`). Ideas that need help: better primary-display guesses for more aircraft, more gauge types, and client setup
 notes for specific devices.
 
 Before your first pull request is merged, a bot asks you to sign the [Contributor License Agreement](CLA.md)

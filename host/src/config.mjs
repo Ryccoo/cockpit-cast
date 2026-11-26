@@ -97,6 +97,8 @@ const ENV = {
   COCKPITCAST_UPDATES: ['updates', (v) => v !== '0' && v !== 'false'],
   COCKPITCAST_UPDATE_URL: ['updateUrl', String],
   COCKPITCAST_UPDATE_CHANNEL: ['updateChannel', String],
+  // Tests: a host that never touches MSFS or this PC's setup (see loadConfig).
+  COCKPITCAST_ISOLATED: ['isolated', (v) => v === '1' || v === 'true'],
 };
 
 export function loadConfig() {
@@ -104,6 +106,10 @@ export function loadConfig() {
   const file = path.join(HOST_DIR, 'config.json');
   if (fs.existsSync(file)) Object.assign(cfg, JSON.parse(fs.readFileSync(file, 'utf8')));
   for (const [name, [key, conv]] of Object.entries(ENV)) if (process.env[name]) cfg[key] = conv(process.env[name]);
+  // Isolated (tests, e.g. host/test/smoke.test.mjs, also while MSFS runs): no SimConnect, no capture
+  // link or injector, no mDNS, no tray, no update checks, no local screens; test data for the gauges.
+  // Point LOCALAPPDATA (and APPDATA) at a scratch folder too, so no saved settings are touched.
+  if (cfg.isolated) Object.assign(cfg, { tray: false, updates: false, autoInject: false, fakeData: true });
   cfg.displays = loadDisplays();
   return cfg;
 }

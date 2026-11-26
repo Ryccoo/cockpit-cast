@@ -239,10 +239,13 @@ try {
   log.error(`cannot listen on port ${cfg.port}: ${err.message}`);
   process.exit(1);
 }
-capture.start();
-sim.start();
-injector.start();
-const mdns = advertise(cfg.port);
+if (cfg.isolated) log.info('isolated (tests): no sim, capture, injector, mDNS, tray, updates or local screens');
+else {
+  capture.start();
+  sim.start();
+  injector.start();
+}
+const mdns = cfg.isolated ? null : advertise(cfg.port);
 const tray = new Tray({
   exe: cfg.trayPath,
   port: cfg.port,
@@ -272,7 +275,7 @@ tray.setLocal(localScreens.state());
 tray.on('update', () => installUpdate().catch((e) => log.warn(`update failed: ${e.message}`)));
 if (cfg.tray || Tray.parented) tray.start();
 updater.start();
-localScreens.start();
+if (!cfg.isolated) localScreens.start();
 
 // Install the newer version: download and check it, tell the client apps to update themselves too,
 // then hand over to the installer, which restarts CockpitCast when done (see updater.mjs).
@@ -319,7 +322,7 @@ async function shutdown() {
   hook.close();
   clients.close();
   hub.close();
-  await Promise.race([mdns.close(), new Promise((r) => setTimeout(r, 1000))]);
+  if (mdns) await Promise.race([mdns.close(), new Promise((r) => setTimeout(r, 1000))]);
   process.exit(0);
 }
 process.on('SIGINT', shutdown);

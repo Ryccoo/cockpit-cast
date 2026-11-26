@@ -24,7 +24,12 @@ env:
   FLUTTER_VERSION: 3.50.1
 
 jobs:
+  # The tests (tests.yml) first: nothing is built or published if they fail.
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   version:
+    needs: tests
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}

@@ -3,6 +3,18 @@
 Everything here can run without the sim. See
 `docs/protocol.md` for the three links (capture pipe, client WebSocket, hook WebSocket).
 
+## Automatic tests
+
+| Part | Run | What |
+|---|---|---|
+| Host | `cd host && npm test` | `host/test/`: the hook's Community folder rules (`install-hook.test.mjs`, a copy of the script against scratch folders), which screen shows what (`screens.test.mjs`), the updater's versions (`updater.test.mjs`), and a real host started isolated on a free port (`smoke.test.mjs`: pages, APIs, client messages, the display apps list) |
+| Display app | `cd client && flutter analyze && flutter test` | `client/test/` |
+
+They need no sim and are safe while MSFS and CockpitCast run: the smoke test's host is isolated
+(`COCKPITCAST_ISOLATED=1`) and uses a scratch data folder. GitHub runs them on every push and pull request
+(`.github/workflows/tests.yml`); a release is built only when they pass. How to write tests:
+[AGENTS.md](../AGENTS.md).
+
 ## Test tools
 
 | Tool | What it does |
@@ -25,6 +37,7 @@ Host environment switches for testing:
 | `COCKPITCAST_AUTO_INJECT=0` | Do not inject by itself (manual: `curl -X POST http://localhost:8800/api/inject`) |
 | `COCKPITCAST_TRAY=0` | No tray icon |
 | `COCKPITCAST_PORT=<port>` | Host port (default 8800; rebuild the hook if you change it) |
+| `COCKPITCAST_ISOLATED=1` | For tests: no SimConnect, capture link, injector, mDNS, tray, update checks or local screens; test data for the gauges. Point `LOCALAPPDATA` at a scratch folder too |
 
 ## Recipes
 
