@@ -23,6 +23,8 @@
 #include <shellapi.h>
 #include <objidl.h>
 #include <gdiplus.h>
+#include <wrl.h>
+#include <WebView2.h>
 
 #include <string>
 #include <vector>
@@ -32,6 +34,7 @@ namespace {
 constexpr UINT WM_TRAY = WM_APP + 1;   // notifications from the tray icon
 constexpr UINT WM_LINE = WM_APP + 2;   // a line from the host (lParam: std::string*)
 constexpr UINT WM_HOSTGONE = WM_APP + 3;  // the host's output closed (it exited)
+constexpr UINT WM_SHOWAPP = WM_APP + 4;   // from a second copy started by the user: show the app window
 constexpr UINT_PTR TIMER_RESTART = 1, TIMER_KILL = 2;
 constexpr int MAX_RESTARTS = 3;
 constexpr UINT ICON_ID = 1;
@@ -145,6 +148,193 @@ void Open(const std::wstring& url) {
   ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
+// ---------------- the app window: editor and monitor in a window of our own (WebView2) ----------------
+// One "CockpitCast" window that shows the host's pages with Microsoft's WebView2 (Edge's engine, part of
+// Windows 10/11), instead of a new browser tab per click. Showing it again brings it to the front; it keeps
+// its size and place (%LOCALAPPDATA%\CockpitCast\app-window.bin) and its WebView2 data in
+// %LOCALAPPDATA%\CockpitCast\webview. Links to other sites open in the normal browser. Without WebView2,
+// the pages open in the browser as before. Closing the window frees it (it is created again when needed).
+using Microsoft::WRL::Callback;
+using Microsoft::WRL::ComPtr;
+
+HWND g_app = nullptr;
+ComPtr<ICoreWebView2Controller> g_wvc;
+ComPtr<ICoreWebView2> g_wv;
+std::wstring g_appUrl;      // page to show once WebView2 is ready
+bool g_wvFailed = false;    // no WebView2 on this PC: use the browser
+
+std::wstring AppPath(const wchar_t* name) {
+  wchar_t p[MAX_PATH] = L"";
+  ExpandEnvironmentStringsW((std::wstring(L"%LOCALAPPDATA%\\CockpitCast\\") + name).c_str(), p, MAX_PATH);
+  return p;
+}
+
+void SaveAppPlacement() {
+  WINDOWPLACEMENT wp{sizeof wp};
+  if (!g_app || !GetWindowPlacement(g_app, &wp)) return;
+  CreateDirectoryW(AppPath(L"").c_str(), nullptr);
+  HANDLE f = CreateFileW(AppPath(L"app-window.bin").c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+  if (f == INVALID_HANDLE_VALUE) return;
+  DWORD n = 0;
+  WriteFile(f, &wp, sizeof wp, &n, nullptr);
+  CloseHandle(f);
+}
+
+// The saved place, if it is still on a monitor.
+bool LoadAppPlacement(WINDOWPLACEMENT& wp) {
+  HANDLE f = CreateFileW(AppPath(L"app-window.bin").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+  if (f == INVALID_HANDLE_VALUE) return false;
+  DWORD n = 0;
+  bool ok = ReadFile(f, &wp, sizeof wp, &n, nullptr) && n == sizeof wp && wp.length == sizeof wp;
+  CloseHandle(f);
+  return ok && MonitorFromRect(&wp.rcNormalPosition, MONITOR_DEFAULTTONULL) != nullptr;
+}
+
+void ResizeWebView() {
+  if (!g_app || !g_wvc) return;
+  RECT r;
+  GetClientRect(g_app, &r);
+  g_wvc->put_Bounds(r);
+}
+
+// Same page without the #part: no need to load it again (it would lose unsaved edits).
+std::wstring Page(const std::wstring& url) { return url.substr(0, url.find(L'#')); }
+
+void NavigateApp(const std::wstring& url) {
+  if (!g_wv) {
+    g_appUrl = url;
+    return;
+  }
+  LPWSTR cur = nullptr;
+  bool same = SUCCEEDED(g_wv->get_Source(&cur)) && cur && Page(cur) == Page(url);
+  if (cur) CoTaskMemFree(cur);
+  if (!same) g_wv->Navigate(url.c_str());
+}
+
+void AppFailed() {
+  g_wvFailed = true;
+  std::wstring url = g_appUrl.empty() ? g_editor : g_appUrl;
+  if (g_app) DestroyWindow(g_app);
+  Open(url);
+}
+
+LRESULT CALLBACK AppProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+  switch (msg) {
+    case WM_SIZE:
+      ResizeWebView();
+      return 0;
+    case WM_DPICHANGED: {
+      auto* r = reinterpret_cast<RECT*>(lp);
+      SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+      return 0;
+    }
+    case WM_CLOSE:
+      SaveAppPlacement();
+      DestroyWindow(hwnd);
+      return 0;
+    case WM_DESTROY:
+      if (g_wvc) g_wvc->Close();
+      g_wvc.Reset();
+      g_wv.Reset();
+      g_app = nullptr;
+      return 0;
+  }
+  return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void CreateApp() {
+  static bool registered = false;
+  HINSTANCE inst = GetModuleHandleW(nullptr);
+  if (!registered) {
+    WNDCLASSW wc{};
+    wc.lpfnWndProc = AppProc;
+    wc.hInstance = inst;
+    wc.lpszClassName = L"CockpitCastApp";
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hbrBackground = CreateSolidBrush(RGB(15, 16, 18));  // the pages' background: no white flash
+    RegisterClassW(&wc);
+    registered = true;
+  }
+  g_app = CreateWindowExW(0, L"CockpitCastApp", L"CockpitCast", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1400, 900, nullptr, nullptr, inst, nullptr);
+  if (!g_app) return;
+  if (g_icon) {
+    SendMessageW(g_app, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(g_icon));
+    SendMessageW(g_app, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(g_icon));
+  }
+  WINDOWPLACEMENT wp{sizeof wp};
+  if (LoadAppPlacement(wp)) {
+    if (wp.showCmd == SW_SHOWMINIMIZED || wp.showCmd == SW_MINIMIZE) wp.showCmd = SW_SHOWNORMAL;
+    SetWindowPlacement(g_app, &wp);
+  } else {
+    ShowWindow(g_app, SW_SHOWNORMAL);
+  }
+  CreateDirectoryW(AppPath(L"").c_str(), nullptr);
+  std::wstring data = AppPath(L"webview");
+  HWND app = g_app;
+  HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(nullptr, data.c_str(), nullptr,
+    Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>([app](HRESULT r, ICoreWebView2Environment* env) -> HRESULT {
+      if (FAILED(r) || !env || g_app != app) {
+        if (g_app == app) AppFailed();
+        return S_OK;
+      }
+      return env->CreateCoreWebView2Controller(app, Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+        [app](HRESULT r2, ICoreWebView2Controller* c) -> HRESULT {
+          if (g_app != app) {  // closed meanwhile
+            if (c) c->Close();
+            return S_OK;
+          }
+          if (FAILED(r2) || !c) {
+            AppFailed();
+            return S_OK;
+          }
+          g_wvc = c;
+          g_wvc->get_CoreWebView2(&g_wv);
+          COREWEBVIEW2_COLOR bg{255, 15, 16, 18};
+          ComPtr<ICoreWebView2Controller2> c2;
+          if (SUCCEEDED(g_wvc.As(&c2))) c2->put_DefaultBackgroundColor(bg);
+          ComPtr<ICoreWebView2Settings> s;
+          if (SUCCEEDED(g_wv->get_Settings(&s))) s->put_IsStatusBarEnabled(FALSE);
+          // Links that open a new window (Ko-fi, GitHub, ...): the normal browser.
+          g_wv->add_NewWindowRequested(Callback<ICoreWebView2NewWindowRequestedEventHandler>([](ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs* a) -> HRESULT {
+            LPWSTR uri = nullptr;
+            if (SUCCEEDED(a->get_Uri(&uri)) && uri) {
+              Open(uri);
+              CoTaskMemFree(uri);
+            }
+            a->put_Handled(TRUE);
+            return S_OK;
+          }).Get(), nullptr);
+          // The window title follows the page ("CockpitCast Editor", "CockpitCast Monitor").
+          g_wv->add_DocumentTitleChanged(Callback<ICoreWebView2DocumentTitleChangedEventHandler>([](ICoreWebView2* w, IUnknown*) -> HRESULT {
+            LPWSTR t = nullptr;
+            if (g_app && SUCCEEDED(w->get_DocumentTitle(&t)) && t) {
+              SetWindowTextW(g_app, *t ? t : L"CockpitCast");
+              CoTaskMemFree(t);
+            }
+            return S_OK;
+          }).Get(), nullptr);
+          ResizeWebView();
+          g_wv->Navigate((g_appUrl.empty() ? g_editor : g_appUrl).c_str());
+          return S_OK;
+        }).Get());
+    }).Get());
+  if (FAILED(hr)) AppFailed();  // no WebView2 runtime
+}
+
+// Show the editor or the monitor in the app window (the browser if WebView2 is missing).
+void ShowApp(const std::wstring& url) {
+  if (g_wvFailed) return Open(url);
+  if (!g_app) {
+    g_appUrl = url;
+    CreateApp();
+    if (!g_app && !g_wvFailed) Open(url);
+    return;
+  }
+  NavigateApp(url);
+  if (IsIconic(g_app)) ShowWindow(g_app, SW_RESTORE);
+  SetForegroundWindow(g_app);
+}
+
 // %LOCALAPPDATA%\CockpitCast\logs: the host's logs, the capture DLL's, and the display app's on this PC.
 void OpenLogs() {
   wchar_t dir[MAX_PATH] = L"";
@@ -186,8 +376,8 @@ void ShowMenu(int x, int y) {
   SetForegroundWindow(g_wnd); // so the menu closes when clicking elsewhere
   UINT cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, x, y, 0, g_wnd, nullptr);
   DestroyMenu(m);
-  if (cmd == CMD_EDITOR) Open(g_editor);
-  else if (cmd == CMD_MONITOR) Open(g_monitor);
+  if (cmd == CMD_EDITOR) ShowApp(g_editor);
+  else if (cmd == CMD_MONITOR) ShowApp(g_monitor);
   else if (cmd == CMD_SUPPORT) Open(g_support);
   else if (cmd == CMD_LOGS) OpenLogs();
   else if (cmd == CMD_LOCAL) SendToHost("local-toggle\n");
@@ -274,12 +464,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
       switch (LOWORD(lp)) {
         case NIN_SELECT:
         case NIN_KEYSELECT:
-          Open(g_editor);
+          ShowApp(g_editor);
           break;
         case WM_CONTEXTMENU:
           ShowMenu(GET_X_LPARAM(wp), GET_Y_LPARAM(wp));
           break;
       }
+      return 0;
+    case WM_SHOWAPP:
+      ShowApp(g_editor);
       return 0;
     case WM_LINE: {
       auto* s = reinterpret_cast<std::string*>(lp);
@@ -425,8 +618,16 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
   g_launcher = !stdIn || stdIn == INVALID_HANDLE_VALUE || GetFileType(stdIn) != FILE_TYPE_PIPE;
   if (g_launcher) {
     g_single = CreateMutexW(nullptr, TRUE, L"Local\\CockpitCastTray");
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {  // already running: just open the editor
-      Open(g_editor);
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {  // already running: it shows its editor window
+      HWND first = FindWindowW(L"CockpitCastTray", nullptr);
+      if (first) {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(first, &pid);
+        AllowSetForegroundWindow(pid);  // we were started by the user: let it come to the front
+        PostMessageW(first, WM_SHOWAPP, 0, 0);
+      } else {
+        Open(g_editor);
+      }
       return 0;
     }
     if (!FindHost()) {
@@ -438,6 +639,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     g_toHost = GetStdHandle(STD_OUTPUT_HANDLE);
   }
 
+  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);  // WebView2 (the app window)
   Gdiplus::GdiplusStartupInput gsi;
   ULONG_PTR gdiplus = 0;
   Gdiplus::GdiplusStartup(&gdiplus, &gsi, nullptr);

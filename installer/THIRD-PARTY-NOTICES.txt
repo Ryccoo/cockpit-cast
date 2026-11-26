@@ -6,6 +6,10 @@ Host (sim PC)
   bonjour-service (network discovery)    MIT licence, https://github.com/onlxltd/bonjour-service
   node-simconnect (SimConnect protocol)  LGPL-3.0, https://github.com/EvenAR/node-simconnect
                                          Its source is included in host\node_modules\node-simconnect.
+  WebView2 SDK loader (in cockpitcast.exe, the app window)
+                                         BSD 3-Clause licence, Copyright (C) Microsoft Corporation,
+                                         https://www.nuget.org/packages/Microsoft.Web.WebView2
+                                         The WebView2 runtime itself is part of Windows.
 
 Client (display PCs)
   Flutter engine and framework           BSD 3-Clause licence, https://github.com/flutter/flutter
