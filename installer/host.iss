@@ -104,9 +104,10 @@ begin
     WizardForm.StatusLabel.Caption := 'Installing the Community hook into MSFS 2024...';
     Code := SetupHook('');
     // 3: no Community folder found (moved add-ons, Addons Linker, ...). Ask for it; the hook remembers
-    // the answer, so later repairs and updates use it too. Not during silent updates.
+    // the answer, so later repairs and updates use it too. Also during CockpitCast's own (silent)
+    // updates: someone clicked Install update, so they are at this PC.
     Dir := '';
-    while (Code = 3) and not WizardSilent and
+    while (Code = 3) and
           BrowseForFolder('MSFS 2024''s Community folder was not found. Choose the Community folder the sim ' +
                           'loads add-ons from (for example E:\MSFS2024\Community). If you use Addons Linker ' +
                           'or moved your add-ons, pick the folder the sim reads them from.', Dir, False) do

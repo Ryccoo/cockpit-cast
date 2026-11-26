@@ -5,8 +5,9 @@
 //
 // The Community folder, first match wins: --community, the MSFS_COMMUNITY environment variable, the
 // folder chosen last time (saved in %LOCALAPPDATA%\CockpitCast\hook.json, so repairs after sim updates
-// find it again), the sim's packages folder from UserCfg.opt, the default location. A folder given with
-// --community is saved. Exit code 3: no Community folder found (the installer then asks for it).
+// find it again), the sim's packages folder from UserCfg.opt, the default location. A folder found
+// through --community or MSFS_COMMUNITY is saved. Exit code 3: no Community folder found (the installer
+// then asks for it). Nothing is changed when it exits with an error: an installed hook stays.
 //
 // Only one package can override BaseInstrument.js at a time. If another Community package
 // overrides it too, this refuses unless --force is given.
@@ -85,7 +86,9 @@ if (!found) {
   process.exit(NOT_FOUND);
 }
 const COMMUNITY = found[0];
-if (given) {
+// Remember a folder the user named (also through MSFS_COMMUNITY: an update or uninstall may run without
+// that variable, e.g. from a tray started before it was set).
+if ((found[1] === '--community' || found[1] === 'MSFS_COMMUNITY') && COMMUNITY !== savedCommunity()) {
   try {
     fs.mkdirSync(path.dirname(SAVED), { recursive: true });
     fs.writeFileSync(SAVED, JSON.stringify({ community: COMMUNITY }, null, 2) + '\n');
