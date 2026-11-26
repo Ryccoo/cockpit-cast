@@ -41,6 +41,7 @@
   <a href="/editor" style="color:#9aa0a8;margin-left:16px">Layout editor</a>
   <span class="pill" title="The CockpitCast host this page talks to">host <b id="host">…</b></span>
   <span class="pill" title="The version of CockpitCast running on the sim PC, and whether a newer one is out">version <b id="ver">…</b></span>
+  <label class="pill" id="betaBox" style="display:none;cursor:pointer" title="Also offer beta versions: test versions published before a release, for testers. Off: normal releases only. A beta updates to its release by itself."><input type="checkbox" id="beta" style="vertical-align:-2px"> beta versions</label>
   <span class="pill" title="This page's own connection to the host (not the sim)">this page <b id="link" class="bad">connecting</b></span>
   <span class="pill" title="MSFS, via SimConnect: running, in a flight, which aircraft">sim <b id="sim">?</b></span>
   <span class="pill" title="capture.dll inside the sim (loaded about 10 s after a flight is live)">capture <b id="cap">?</b></span>
@@ -89,6 +90,10 @@ function onText(m) {
       const u = m.update;
       const note = u.state === 'installing' ? ` · installing ${u.latest}` : u.available ? ` · ${u.latest} available` : u.latest ? ' · up to date' : '';
       setText('ver', u.current + note, !u.available);
+      // Switched on this PC only (the host refuses it from other computers).
+      const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+      document.getElementById('betaBox').style.display = local ? '' : 'none';
+      document.getElementById('beta').checked = !!u.beta;
     }
     const s = m.sim;
     setText('sim', !s.connected ? 'not running' : s.inFlight ? (s.paused ? 'paused' : 'in flight') + (s.aircraft ? ` · ${s.aircraft}` : '') : 'menu', s.connected && s.inFlight);
@@ -159,6 +164,9 @@ async function onFrame(buf) {
   v.info.textContent = `${w}×${h} · ${fps.toFixed(1)} fps · #${seq}` + (location.hostname === 'localhost' ? ` · ${age.toFixed(0)} ms` : '');
 }
 
+document.getElementById('beta').onchange = (e) => {
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'setUpdateBeta', on: e.target.checked }));
+};
 function setText(id, text, ok) {
   const el = document.getElementById(id);
   el.textContent = text;

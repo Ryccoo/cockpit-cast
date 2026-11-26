@@ -22,7 +22,7 @@ Future<void> main(List<String> args) async {
     await placeWindow(settings.output, title: 'CockpitCast · window ${settings.outputIndex + 1}');
   } else {
     await ExtraWindowsCloser.instance.install();
-    Updater.instance.start(args: args, autoInstall: settings.autoUpdate);
+    Updater.instance.start(args: args, autoInstall: settings.autoUpdate, beta: settings.betaUpdates);
     moveLegacyLaunchAtLogin(settings);
   }
   runApp(CockpitCastApp(settings: settings));

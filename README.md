@@ -124,6 +124,10 @@ Installed copies update themselves; there is no need to download a new installer
 - The only thing sent is a request for the latest release from GitHub's API. To turn the host's check
   off, set `"updates": false` in `host/config.json` (or `COCKPITCAST_UPDATES=0`). Copies built from
   source show that a new release exists but do not install it.
+- **Beta versions** (for testers): test versions published before a release. Nobody gets them unless
+  they switch them on: *beta versions* next to the version on the monitor page (on the sim PC), and
+  *Settings > Updates > Get beta versions* in the display app. A beta updates to the final release by
+  itself.
 
 To build from source instead, follow the quick start below.
 

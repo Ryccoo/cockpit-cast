@@ -11,6 +11,12 @@
 //   The installer runs silently (a progress window only), waits for CockpitCast to close, and starts it
 //   again when done (/UPDATE=1, see installer/host.iss). Its log: %LOCALAPPDATA%\CockpitCast\logs\update-install.log.
 // Turn the check off with "updates": false in host/config.json or COCKPITCAST_UPDATES=0.
+//
+// Betas: a version tag with a suffix (v0.2.5-beta.1) is published as a GitHub pre-release, which
+// "latest" never returns. Only copies with beta versions switched on (the monitor page on the sim PC;
+// saved in <dataDir>/update-settings.json, or COCKPITCAST_UPDATE_CHANNEL=beta) look at all releases
+// and take the newest, beta or not. A beta counts as older than its release (0.2.5-beta.1 < 0.2.5),
+// so a beta copy updates to the release like everyone else.
 
 import { EventEmitter } from 'node:events';
 import { spawn } from 'node:child_process';
@@ -23,6 +29,7 @@ const log = makeLog('update');
 const FIRST_CHECK_MS = 60_000;
 const CHECK_EVERY_MS = 12 * 3600_000;
 const ASSET = 'CockpitCast-Host-Setup.exe';
+const VERSION_RE = /^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/;
 const SUMS = 'SHA256SUMS.txt';
 
 export class Updater extends EventEmitter {
@@ -39,6 +46,28 @@ export class Updater extends EventEmitter {
     this.state = 'idle'; // idle | available | downloading | installing | error
     this.error = null;
     this.timers = [];
+    this.settingsFile = path.join(cfg.dataDir, 'update-settings.json');
+    this.beta = cfg.updateChannel === 'beta';
+    try {
+      const saved = JSON.parse(fs.readFileSync(this.settingsFile, 'utf8'));
+      if (typeof saved.beta === 'boolean' && !process.env.COCKPITCAST_UPDATE_CHANNEL) this.beta = saved.beta;
+    } catch {}
+  }
+
+  /// Switch beta versions on or off (saved), and check again straight away.
+  setBeta(on) {
+    this.beta = !!on;
+    try {
+      fs.mkdirSync(path.dirname(this.settingsFile), { recursive: true });
+      fs.writeFileSync(this.settingsFile, JSON.stringify({ beta: this.beta }, null, 2) + '\n');
+    } catch (e) {
+      log.warn(`cannot save ${this.settingsFile}: ${e.message}`);
+    }
+    log.info(`beta versions ${this.beta ? 'on' : 'off'}`);
+    this.release = null;
+    if (this.state === 'available') this.set('idle');
+    else this.emit('change', this.info());
+    return this.check();
   }
 
   start() {
@@ -58,20 +87,25 @@ export class Updater extends EventEmitter {
       state: this.state,
       error: this.error,
       canInstall: this.canInstall,
+      beta: this.beta,
     };
   }
 
   async check() {
     try {
-      const res = await fetch(this.cfg.updateUrl || `https://api.github.com/repos/${this.repo}/releases/latest`, {
+      // updateUrl (tests) answers like releases/latest: one release, or a list of them.
+      const url = this.cfg.updateUrl || `https://api.github.com/repos/${this.repo}/releases${this.beta ? '?per_page=20' : '/latest'}`;
+      const res = await fetch(url, {
         headers: { accept: 'application/vnd.github+json', 'user-agent': 'cockpitcast-updater' },
         signal: AbortSignal.timeout(20_000),
       });
       if (res.status === 404) return; // no release yet
       if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
-      const r = await res.json();
+      const body = await res.json();
+      const r = Array.isArray(body) ? pickRelease(body, this.beta) : body;
+      if (!r) return; // no usable release
       const version = String(r.tag_name ?? '').replace(/^v/, '');
-      if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`unexpected release tag '${r.tag_name}'`);
+      if (!VERSION_RE.test(version)) throw new Error(`unexpected release tag '${r.tag_name}'`);
       const assets = Object.fromEntries((r.assets ?? []).map((a) => [a.name, a.browser_download_url]));
       const was = this.release?.version;
       this.release = { version, url: r.html_url, assets };
@@ -134,7 +168,7 @@ export class Updater extends EventEmitter {
   cleanOld() {
     try {
       for (const name of fs.readdirSync(this.dir)) {
-        const v = /^CockpitCast-Host-(\d+\.\d+\.\d+)-Setup\.exe$/.exec(name)?.[1];
+        const v = /^CockpitCast-Host-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)-Setup\.exe$/.exec(name)?.[1];
         if (v && !newer(v, this.current)) fs.rmSync(path.join(this.dir, name), { force: true });
       }
     } catch {}
@@ -151,9 +185,39 @@ async function get(url) {
   return res;
 }
 
-/// a > b, for "x.y.z" versions.
+/// The newest release in a GitHub release list: published (not drafts), with a version tag; betas
+/// (pre-releases) only if beta is on.
+export function pickRelease(list, beta) {
+  let best = null;
+  for (const r of list) {
+    const v = String(r?.tag_name ?? '').replace(/^v/, '');
+    if (r?.draft || !VERSION_RE.test(v) || ((r.prerelease || v.includes('-')) && !beta)) continue;
+    if (!best || newer(v, String(best.tag_name).replace(/^v/, ''))) best = r;
+  }
+  return best;
+}
+
+/// a > b, for "x.y.z" versions with an optional pre-release suffix ("0.2.5-beta.2"). As in semver: a
+/// pre-release is older than its release (0.2.5-beta.1 < 0.2.5), and suffixes compare part by part
+/// (numbers as numbers: beta.2 < beta.10).
 export function newer(a, b) {
-  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
-  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  const split = (v) => {
+    const i = String(v).indexOf('-');
+    return i < 0 ? [String(v), ''] : [String(v).slice(0, i), String(v).slice(i + 1)];
+  };
+  const [ma, pa] = split(a), [mb, pb] = split(b);
+  const na = ma.split('.').map(Number), nb = mb.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((na[i] || 0) !== (nb[i] || 0)) return (na[i] || 0) > (nb[i] || 0);
+  if (pa === pb) return false;
+  if (!pa || !pb) return !pa; // the release is newer than any of its pre-releases
+  const xa = pa.split('.'), xb = pb.split('.');
+  for (let i = 0; i < Math.max(xa.length, xb.length); i++) {
+    if (xa[i] === undefined || xb[i] === undefined) return xb[i] === undefined; // longer = newer
+    if (xa[i] === xb[i]) continue;
+    const da = /^\d+$/.test(xa[i]), db = /^\d+$/.test(xb[i]);
+    if (da && db) return Number(xa[i]) > Number(xb[i]);
+    if (da !== db) return !da; // text parts sort after numbers
+    return xa[i] > xb[i];
+  }
   return false;
 }

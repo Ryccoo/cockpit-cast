@@ -96,6 +96,7 @@ const clients = new ClientServer({
   },
   onDataWanted: (w) => dataSource.setDataWanted(w),
   onInstallUpdate: () => installUpdate(),
+  onSetUpdateBeta: (on) => updater.setBeta(on),
 });
 let latestGauge = null;
 dataSource.on('data', (values) => {

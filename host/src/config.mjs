@@ -74,6 +74,8 @@ const DEFAULTS = {
   updateRepo: 'Ryccoo/cockpit-cast',
   // Where the latest release is described (GitHub API format); null = the GitHub repo above.
   updateUrl: null,
+  // 'beta': also offer beta versions (pre-releases). Normally switched on the monitor page instead.
+  updateChannel: 'stable',
   root: ROOT,
   dataDir: DATA_DIR,
   logFile: path.join(DATA_DIR, 'logs', 'host.log'),
@@ -91,6 +93,7 @@ const ENV = {
   COCKPITCAST_TRAY: ['tray', (v) => v !== '0' && v !== 'false'],
   COCKPITCAST_UPDATES: ['updates', (v) => v !== '0' && v !== 'false'],
   COCKPITCAST_UPDATE_URL: ['updateUrl', String],
+  COCKPITCAST_UPDATE_CHANNEL: ['updateChannel', String],
 };
 
 export function loadConfig() {

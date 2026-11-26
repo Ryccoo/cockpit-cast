@@ -8,6 +8,8 @@
 # attached to the release (see the android job).
 # The file names have no version in them, so .../releases/latest/download/<name> always gets the latest.
 # The tag must match the version in host/package.json, client/pubspec.yaml and client/lib/about.dart.
+# Betas: a tag with a suffix (v0.2.5-beta.1, same version in the code) becomes a GitHub pre-release; see
+# the Publish step and docs/development.md ("Beta releases").
 name: Release
 
 on:
@@ -191,5 +193,10 @@ jobs:
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" dist/* --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --title "CockpitCast $VERSION" --generate-notes --verify-tag
+            # A version with a suffix (0.2.5-beta.1) is a beta: a pre-release, which GitHub's "latest" (the
+            # website's download links, the updaters) never returns. Only copies with beta versions on see it.
+            case "$VERSION" in
+              *-*) gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --title "CockpitCast $VERSION (beta)" --generate-notes --verify-tag --prerelease ;;
+              *)   gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --title "CockpitCast $VERSION" --generate-notes --verify-tag ;;
+            esac
           fi

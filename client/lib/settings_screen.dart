@@ -352,6 +352,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: s.autoUpdate,
               onChanged: (v) => setState(() => s.autoUpdate = v),
             ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Get beta versions'),
+            subtitle: const Text('Test versions before they are released. For testers: they may have problems. A beta updates to the release by itself.'),
+            value: s.betaUpdates,
+            onChanged: (v) {
+              setState(() => s.betaUpdates = v);
+              u.beta = v;
+              s.saveBetaUpdates(); // takes effect now, without "Save and start"
+              u.check();
+            },
+          ),
         ]);
       },
     );

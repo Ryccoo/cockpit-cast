@@ -110,6 +110,7 @@ class Settings {
     this.launchAtLogin = false,
     this.hideCursor = false,
     this.autoUpdate = true,
+    this.betaUpdates = false,
     this.profile = '',
     required this.clientName,
     List<OutputConfig>? outputs,
@@ -131,6 +132,9 @@ class Settings {
 
   /// Install a new version when the app starts (Windows, installed copies; see updater.dart).
   bool autoUpdate;
+
+  /// Also offer beta versions (test versions before a release; see updater.dart).
+  bool betaUpdates;
 
   /// Prefix for saved keys, so separate copies on one box keep separate settings.
   String profile;
@@ -192,6 +196,7 @@ class Settings {
       launchAtLogin: p.getBool(k('launchAtLogin')) ?? false,
       hideCursor: p.getBool(k('hideCursor')) ?? false,
       autoUpdate: p.getBool(k('autoUpdate')) ?? true,
+      betaUpdates: p.getBool(k('betaUpdates')) ?? false,
       profile: profile,
       clientName: p.getString(k('clientName')) ?? _defaultName(),
       outputs: outputs,
@@ -242,6 +247,12 @@ class Settings {
     return s;
   }
 
+  /// Only the beta setting: its switch takes effect at once, without saving the rest of the page.
+  Future<void> saveBetaUpdates() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(profile.isEmpty ? 'betaUpdates' : '$profile.betaUpdates', betaUpdates);
+  }
+
   Future<void> save() async {
     final p = await SharedPreferences.getInstance();
     String k(String name) => profile.isEmpty ? name : '$profile.$name';
@@ -256,6 +267,7 @@ class Settings {
     await p.setBool(k('launchAtLogin'), launchAtLogin);
     await p.setBool(k('hideCursor'), hideCursor);
     await p.setBool(k('autoUpdate'), autoUpdate);
+    await p.setBool(k('betaUpdates'), betaUpdates);
     await p.setString(k('clientName'), clientName);
     await p.setString(k('outputs'), jsonEncode([for (final o in outputs) o.toJson()]));
   }

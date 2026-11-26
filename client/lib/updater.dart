@@ -8,6 +8,10 @@
 // When: at start (installs straight away if "Update automatically" is on), every 6 hours (only noted),
 // when the user taps "Update now", and when the host installs its own update (the host's "update"
 // message: one click on the sim PC updates the display PCs too).
+//
+// Betas (tags like v0.2.5-beta.1, published as GitHub pre-releases) are only offered with "Get beta
+// versions" on: the app then looks at all releases instead of "latest". A beta counts as older than its
+// release (0.2.5-beta.1 < 0.2.5), so a beta copy updates to the release by itself.
 
 import 'dart:async';
 import 'dart:convert';
@@ -21,6 +25,8 @@ import 'about.dart';
 import 'desktop.dart';
 
 const _releaseApi = 'https://api.github.com/repos/Ryccoo/cockpit-cast/releases/latest';
+const _releasesApi = 'https://api.github.com/repos/Ryccoo/cockpit-cast/releases?per_page=20';
+final _versionRe = RegExp(r'^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$');
 const _asset = 'CockpitCast-Client-Setup.exe';
 const _sums = 'SHA256SUMS.txt';
 
@@ -39,6 +45,9 @@ class Updater extends ChangeNotifier {
   /// The command line this copy was started with (given back to it after an update).
   List<String> _args = const [];
   bool _enabled = false;
+
+  /// Also offer beta versions (the "Get beta versions" setting).
+  bool beta = false;
   Timer? _timer;
 
   bool get available => latest != null && newerVersion(latest!, appVersion);
@@ -51,10 +60,11 @@ class Updater extends ChangeNotifier {
   }
 
   /// Window 1 only (extra windows are copies of the app that it starts and stops).
-  void start({required List<String> args, required bool autoInstall}) {
+  void start({required List<String> args, required bool autoInstall, bool beta = false}) {
     if (_enabled) return;
     _enabled = true;
     _args = args;
+    this.beta = beta;
     Timer(const Duration(seconds: 10), () async {
       await check();
       if (autoInstall && available && canInstall) await install();
@@ -64,9 +74,12 @@ class Updater extends ChangeNotifier {
 
   Future<void> check() async {
     try {
-      final j = await _getJson(Platform.environment['COCKPITCAST_UPDATE_URL'] ?? _releaseApi); // override: testing
+      // Override for tests: answers like releases/latest (one release) or like the list.
+      final body = await _getJson(Platform.environment['COCKPITCAST_UPDATE_URL'] ?? (beta ? _releasesApi : _releaseApi));
+      final j = body is List ? _pickRelease(body, beta) : (body as Map).cast<String, dynamic>();
+      if (j == null) throw _NoRelease();
       final v = '${j['tag_name'] ?? ''}'.replaceFirst(RegExp('^v'), '');
-      if (!RegExp(r'^\d+\.\d+\.\d+$').hasMatch(v)) throw 'unexpected release tag ${j['tag_name']}';
+      if (!_versionRe.hasMatch(v)) throw 'unexpected release tag ${j['tag_name']}';
       latest = v;
       releaseUrl = j['html_url'] as String?;
       _assets = {for (final a in (j['assets'] as List? ?? const [])) '${a['name']}': '${a['browser_download_url']}'};
@@ -138,11 +151,28 @@ class Updater extends ChangeNotifier {
 
 class _NoRelease implements Exception {}
 
-Future<Map<String, dynamic>> _getJson(String url) async {
+/// One release (a Map) or a list of them.
+Future<Object?> _getJson(String url) async {
   final (status, body) = await _fetch(url, accept: 'application/vnd.github+json', timeout: const Duration(seconds: 30));
   if (status == 404) throw _NoRelease();
   if (status != 200) throw 'GitHub answered $status';
-  return (jsonDecode(utf8.decode(body)) as Map).cast<String, dynamic>();
+  return jsonDecode(utf8.decode(body));
+}
+
+/// The newest release in a GitHub release list: published (not drafts), with a version tag; betas
+/// (pre-releases) only if [beta].
+Map<String, dynamic>? _pickRelease(List list, bool beta) {
+  Map<String, dynamic>? best;
+  String? bestV;
+  for (final r in list.whereType<Map>()) {
+    final v = '${r['tag_name'] ?? ''}'.replaceFirst(RegExp('^v'), '');
+    if (r['draft'] == true || !_versionRe.hasMatch(v) || ((r['prerelease'] == true || v.contains('-')) && !beta)) continue;
+    if (bestV == null || newerVersion(v, bestV)) {
+      best = r.cast<String, dynamic>();
+      bestV = v;
+    }
+  }
+  return best;
 }
 
 Future<List<int>> _getBytes(String url) async {
@@ -187,12 +217,32 @@ Future<(int, List<int>)> _fetch(String url, {String? accept, required Duration t
   }
 }
 
-/// a > b for "x.y.z" versions.
+/// a > b, for "x.y.z" versions with an optional pre-release suffix ("0.2.5-beta.2"). As in semver (and
+/// the host's updater.mjs): a pre-release is older than its release (0.2.5-beta.1 < 0.2.5), and
+/// suffixes compare part by part, numbers as numbers (beta.2 < beta.10).
 bool newerVersion(String a, String b) {
-  final pa = a.split('.').map((x) => int.tryParse(x) ?? 0).toList(), pb = b.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+  (String, String) split(String v) {
+    final i = v.indexOf('-');
+    return i < 0 ? (v, '') : (v.substring(0, i), v.substring(i + 1));
+  }
+
+  final (ma, pa) = split(a);
+  final (mb, pb) = split(b);
+  final na = ma.split('.').map((x) => int.tryParse(x) ?? 0).toList(), nb = mb.split('.').map((x) => int.tryParse(x) ?? 0).toList();
   for (var i = 0; i < 3; i++) {
-    final x = i < pa.length ? pa[i] : 0, y = i < pb.length ? pb[i] : 0;
+    final x = i < na.length ? na[i] : 0, y = i < nb.length ? nb[i] : 0;
     if (x != y) return x > y;
+  }
+  if (pa == pb) return false;
+  if (pa.isEmpty || pb.isEmpty) return pa.isEmpty; // the release is newer than its pre-releases
+  final xa = pa.split('.'), xb = pb.split('.');
+  for (var i = 0; i < xa.length || i < xb.length; i++) {
+    if (i >= xa.length || i >= xb.length) return i >= xb.length; // longer = newer
+    if (xa[i] == xb[i]) continue;
+    final da = int.tryParse(xa[i]), db = int.tryParse(xb[i]);
+    if (da != null && db != null) return da > db;
+    if ((da == null) != (db == null)) return da == null; // text parts sort after numbers
+    return xa[i].compareTo(xb[i]) > 0;
   }
   return false;
 }

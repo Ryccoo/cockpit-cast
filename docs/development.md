@@ -94,6 +94,27 @@ be built with a higher version (host/package.json, client/pubspec.yaml and clien
 - The version is in three places: `host/package.json`, `client/pubspec.yaml` and `client/lib/about.dart`
   (`appVersion`, which the client's updater compares). The release workflow refuses a tag that differs.
 
+## Beta releases
+
+A beta is a test version for your own machines (and testers) before everyone gets it.
+
+1. Set the version to e.g. `0.2.5-beta.1` in the three places (`host/package.json`,
+   `client/pubspec.yaml` as `0.2.5-beta.1+N`, `client/lib/about.dart`), commit, and push the tag
+   `v0.2.5-beta.1`.
+2. The release workflow publishes it as a GitHub **pre-release**. GitHub's "latest release" never
+   returns a pre-release, so the website's download buttons and normal copies' update checks keep
+   offering the last release.
+3. Copies with beta versions switched on see it and update to it:
+   - host: the *beta versions* switch on the monitor page (sim PC only); saved in
+     `%LOCALAPPDATA%\CockpitCast\update-settings.json`, or `COCKPITCAST_UPDATE_CHANNEL=beta`;
+   - display app: *Settings > Updates > Get beta versions*.
+   They read the release list (`/releases`) instead of `/releases/latest` and take the newest version.
+4. When it's good, set the version to `0.2.5` and tag `v0.2.5`. A beta counts as older than its
+   release (`0.2.5-beta.1 < 0.2.5`, as in semver; `beta.2 < beta.10`), so beta copies update to it too.
+
+The order is in `newer()` (`host/src/updater.mjs`) and `newerVersion()` (`client/lib/updater.dart`),
+tested in `client/test/version_test.dart`.
+
 ## Android test builds
 
 The Android app is not published with the releases; it is planned for the Play Store. The release

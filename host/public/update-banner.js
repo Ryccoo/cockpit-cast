@@ -38,7 +38,8 @@
     if (u.state === 'downloading') el.innerHTML = `<span class="msg">Downloading CockpitCast ${esc(u.latest)}…</span>`;
     else if (u.state === 'installing') el.innerHTML = `<span class="msg">Installing CockpitCast ${esc(u.latest)}. The host and the display PCs restart by themselves; this page reconnects when it is back.</span>`;
     else {
-      const what = u.state === 'error' ? `Update failed: ${esc(u.error)}` : `<b>CockpitCast ${esc(u.latest)}</b> is available (this is ${esc(u.current)}).`;
+      const beta = String(u.latest).includes('-') ? ' (beta)' : '';
+      const what = u.state === 'error' ? `Update failed: ${esc(u.error)}` : `<b>CockpitCast ${esc(u.latest)}</b>${beta} is available (this is ${esc(u.current)}).`;
       const action = !u.canInstall
         ? '<a class="b" href="https://cockpitcast.ludvigh.dev/#download" target="_blank" rel="noopener">Download</a>'
         : local
