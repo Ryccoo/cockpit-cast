@@ -227,7 +227,10 @@ class HostConnection extends ChangeNotifier {
     try {
       await ch.ready.timeout(const Duration(seconds: 5));
     } catch (e) {
-      _onDown('Cannot reach $host:$port');
+      // Close the attempt we give up on: on a slow network it can still connect later, and the host
+      // would then keep a connection nobody uses (one per retry).
+      _closeChannel(ch);
+      if (_channel == ch) _onDown('Cannot reach $host:$port');
       return;
     }
     if (_closed || _channel != ch) return;
@@ -299,10 +302,18 @@ class HostConnection extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _closeChannel(WebSocketChannel ch) {
+    try {
+      ch.sink.close().catchError((_) {});
+    } catch (_) {}
+  }
+
   void _onDown(String why) {
     _sub?.cancel();
     _sub = null;
+    final old = _channel;
     _channel = null;
+    if (old != null) _closeChannel(old);
     if (_closed) return;
     // Once per outage (retries repeat the same reason every few seconds).
     if (!_downLogged) AppLog.warn('link', '$why; retrying');

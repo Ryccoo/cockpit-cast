@@ -25,6 +25,21 @@ export class ClientServer {
       if (this.pausedFile && fs.existsSync(this.pausedFile)) this.paused = new Set(JSON.parse(fs.readFileSync(this.pausedFile, 'utf8')).paused ?? []);
     } catch {}
     this.appsTimer = setInterval(() => this.sendApps(), 2000);
+    // Every 30 s: a connection that did not answer the last ping is gone (a device that slept or left
+    // the network without closing it) and is dropped.
+    this.pingTimer = setInterval(() => {
+      for (const c of this.clients) {
+        if (c.alive === false) {
+          log.info(`client #${c.id}${c.name ? ` "${c.name}"` : ''} stopped answering; dropping it`);
+          c.ws.terminate();
+          continue;
+        }
+        c.alive = false;
+        try {
+          c.ws.ping();
+        } catch {}
+      }
+    }, 30_000);
     this.onInstallUpdate = onInstallUpdate;
     this.onSetUpdateBeta = onSetUpdateBeta;
     this.onCheckUpdate = onCheckUpdate;
@@ -154,6 +169,14 @@ export class ClientServer {
     if (this.layouts) this.send(c, { type: 'layouts', layouts: this.layouts.list() });
     if (this.screens) this.send(c, { type: 'screens', screens: this.screens.list(), ...this.screens.extra() });
 
+    ws.on('pong', () => (c.alive = true));
+    // Every app and page says hello first. A connection that does not within 10 s is a leftover (e.g. an
+    // older display app's abandoned connection attempt that got through late): close it.
+    c.helloTimer = setTimeout(() => {
+      if (c.name) return;
+      log.info(`client #${c.id} from ${c.addr} said nothing for 10 s; closing it`);
+      ws.terminate();
+    }, 10_000);
     ws.on('message', (data, isBinary) => {
       if (isBinary) return;
       let msg;
@@ -165,6 +188,7 @@ export class ClientServer {
       this.onMessage(c, msg);
     });
     ws.on('close', () => {
+      clearTimeout(c.helloTimer);
       for (const s of c.subs.values()) clearTimeout(s.timer);
       this.clients.delete(c);
       this.appsChanged();
@@ -329,11 +353,18 @@ export class ClientServer {
     }
   }
 
-  /// Connected apps (not the editor or monitor pages), for the monitor page and the tray.
+  /// Connected display apps, one row per app window (not the CockpitCast window). An app's settings page
+  /// is a mark on its row; connections that have not said hello yet are left out.
   apps() {
-    return [...this.clients].filter((c) => c.kind === 'app' || c.kind === 'settings').map((c) => ({
+    const named = [...this.clients].filter((c) => c.name && (c.kind === 'app' || c.kind === 'settings'));
+    const dev = (c) => c.device ?? c.addr;
+    const settings = new Set(named.filter((c) => c.kind === 'settings').map(dev));
+    const appDevs = new Set(named.filter((c) => c.kind === 'app').map(dev));
+    // A settings page alone (no window of that app connected) still shows as a row.
+    return named.filter((c) => c.kind === 'app' || !appDevs.has(dev(c))).map((c) => ({
+      settingsOpen: c.kind === 'app' && settings.has(dev(c)),
       id: c.id,
-      name: c.device ?? c.name ?? `client #${c.id}`,
+      name: c.device ?? c.name,
       window: c.window ?? null,
       kind: c.kind,
       shows: c.shows ?? null,
@@ -352,10 +383,10 @@ export class ClientServer {
   appsInfo() {
     let apps = 0, paused = 0, pages = 0;
     for (const c of this.clients) {
-      if (c.kind === 'app') {
+      if (c.kind === 'app' && c.name) {
         apps++;
         if (c.paused) paused++;
-      } else if (c.kind !== 'settings') pages++;
+      } else if (c.kind !== 'settings' && c.kind !== 'app') pages++;
     }
     return { apps, paused, pages };
   }
@@ -515,6 +546,7 @@ export class ClientServer {
 
   close() {
     clearInterval(this.appsTimer);
+    clearInterval(this.pingTimer);
     clearTimeout(this.appsSoon);
     for (const c of this.clients) c.ws.terminate();
     this.wss?.close();

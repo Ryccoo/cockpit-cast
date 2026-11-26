@@ -43,6 +43,26 @@
   .page { display: none; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
   body[data-tab=status] #statusPage, body[data-tab=help] #helpPage, body[data-tab=settings] #settingsPage { display: flex; }
   .page > .body { overflow: auto; padding: 14px 16px 24px; min-width: 0; }
+  .hero { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); margin-bottom: 12px; }
+  .hero.ok { background: linear-gradient(120deg, #18261d 0%, var(--panel) 65%); border-color: #2c4a36; }
+  .hero-k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .hero-t { font-size: 22px; font-weight: 600; margin: 2px 0 3px; overflow-wrap: anywhere; }
+  .hero-s { color: var(--muted); font-size: 13px; }
+  .pill { margin-left: auto; flex: none; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #2a2d33; color: var(--muted); }
+  .pill.ok { background: #1f3a29; color: #84e0a4; } .pill.warn { background: #3a3019; color: #f0c560; } .pill.bad { background: #3d2220; color: #ffb4ae; }
+  .flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 1000px) { .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .step { display: block; color: inherit; text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px 12px; position: relative; overflow: hidden; min-width: 0; }
+  .step::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: #3a3f46; }
+  .step.ok::before { background: var(--accent); } .step.warn::before { background: var(--warn); } .step.bad::before { background: var(--danger); }
+  a.step:hover { border-color: #4a4f57; }
+  .step .sl { color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; }
+  .step .sv { font-size: 17px; font-weight: 600; margin: 3px 0 2px; overflow-wrap: anywhere; }
+  .step .sd { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .sechead { display: flex; align-items: center; gap: 10px; margin: 24px 0 4px; flex-wrap: wrap; }
+  .sechead h2 { margin: 0; }
+  .dispbox { margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; max-width: none; }
+  .dispbox > summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 4px 0; }
   .stcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
   .stcard { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid #4a4f57; border-radius: 8px; padding: 10px 12px; min-width: 0; }
   .stcard.ok { border-left-color: var(--accent); } .stcard.warn { border-left-color: var(--warn); } .stcard.bad { border-left-color: var(--danger); }
@@ -155,7 +175,7 @@
   .seg button { border: 0; border-radius: 0; }
   .seg button.on { background: var(--accent2); }
   /* Status: what each screen shows now */
-  .pgrid { display: flex; flex-wrap: wrap; gap: 18px; padding: 18px; align-content: flex-start; height: 58vh; min-height: 300px; background: #08090a; border: 1px solid var(--line); border-radius: 8px; overflow: auto; }
+  .pgrid { display: flex; flex-wrap: wrap; gap: 18px; padding: 18px; align-content: center; justify-content: center; height: 56vh; min-height: 300px; background: #08090a; border: 1px solid var(--line); border-radius: 12px; overflow: auto; margin-top: 8px; }
   .pgrid .card { display: flex; flex-direction: column; gap: 6px; }
   .pgrid .card .t { color: var(--muted); font-size: 13px; }
   .pgrid .card .t b { color: var(--text); font-weight: 600; }
@@ -209,15 +229,23 @@
 </nav>
 <div id="content">
 <section id="statusPage" class="page"><div class="body">
-  <div id="stWarn"></div>
-  <div id="stCards" class="stcards"></div>
-  <div class="row" style="margin:20px 0 8px">
-    <h2 style="margin:0">What each screen shows now</h2>
-    <span class="seg" title="Where the needles of steam gauges get their values"><button data-mode="live">Live data</button><button data-mode="demo">Demo</button></span>
-    <span class="hint" id="previewHint"></span>
+  <div class="hero" id="hero">
+    <div style="min-width:0">
+      <div class="hero-k" id="heroK">MSFS</div>
+      <div class="hero-t" id="heroT">…</div>
+      <div class="hero-s" id="heroS"></div>
+    </div>
+    <span class="pill" id="heroPill"></span>
   </div>
+  <div id="stWarn"></div>
+  <div class="flow" id="stFlow"></div>
+  <div class="sechead">
+    <h2>Your screens</h2>
+    <span class="grow" style="flex:1"></span>
+    <span class="seg" title="Where the needles of steam gauges get their values"><button data-mode="live">Live data</button><button data-mode="demo">Demo</button></span>
+  </div>
+  <div class="hint" id="previewHint" style="margin:0"></div>
   <div class="pgrid" id="previewGrid"></div>
-  <div class="hint">From the saved settings in <a href="#screens" data-go="screens" style="color:inherit">Screens</a>, for the loaded aircraft. Glass displays are live while MSFS runs a flight.</div>
 </div></section>
 <main>
   <aside>
@@ -276,6 +304,12 @@
       <b>All aircraft:</b> glass cockpits show the chosen glass display (<i>Automatic</i>: the cockpit's own displays in order, PFD first); other aircraft show the layout.
       <b>An aircraft column</b> overrides that while the aircraft is loaded. The loaded aircraft always has a column.</div>
     <div class="scwrap"><table class="sctable" id="scTable"></table></div>
+    <details class="doc dispbox" id="dispBox">
+      <summary>Glass displays in this cockpit <span id="diagInstAc" class="sub" style="font-weight:400"></span></summary>
+      <div class="hint">The instruments MSFS draws on their own page in the loaded aircraft. Each becomes a display you can put on a screen. <b>Primary</b> displays (PFD, MFD, EICAS...) make it a glass cockpit, and <i>Automatic</i> shows them in order, PFD first.
+        <button id="diagInstRefresh" class="icon" style="margin-left:6px">Refresh</button></div>
+      <div id="diagInst"><p class="hint">Loading…</p></div>
+    </details>
   </div>
 </section>
 
@@ -359,11 +393,6 @@
   <details open>
     <summary>Display apps</summary>
     <div id="diagApps"></div>
-  </details>
-  <details>
-    <summary>Instruments in this cockpit <span id="diagInstAc" class="sub"></span></summary>
-    <div class="row" style="margin:4px 0"><button id="diagInstRefresh" class="icon">Refresh</button></div>
-    <div id="diagInst"><p class="hint">Loading…</p></div>
   </details>
 </div></div></section>
 
@@ -1252,7 +1281,7 @@ function renderPreview() {
   previewList = [];
   grid.innerHTML = '';
   const list = screens;
-  $('previewHint').textContent = `What each screen shows now${loadedAircraft ? ` in the ${acName(loadedAircraft)}` : ''} (saved settings).`;
+  $('previewHint').textContent = `What each screen shows right now${loadedAircraft ? ` in the ${acName(loadedAircraft)}` : ''}, from your settings in Screens.`;
   if (!list.length) { grid.innerHTML = `<div class="empty">${connected ? 'No screens.' : 'Not connected to CockpitCast.'}</div>`; return; }
   // Size the cards so all screens fit: try 1..n columns and keep the biggest.
   const W = grid.clientWidth - 36, H = grid.clientHeight - 36, n = list.length;

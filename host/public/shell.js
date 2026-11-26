@@ -22,8 +22,14 @@ function simState() {
   if (!connected) return ['idle', '\u2014', 'Not known: CockpitCast (the host) is not connected.'];
   if (!s?.connected) return ['idle', 'not running', 'MSFS is not running (or not ready yet).'];
   if (!s.inFlight) return ['idle', 'in the menu', 'MSFS is running, no flight loaded.'];
-  const ac = s.aircraft ? ` \u00b7 ${s.aircraft}` : '';
-  return ['ok', (s.paused ? 'paused' : 'in flight') + ac, `In a flight${s.paused ? ' (paused)' : ''}${s.aircraft ? `: ${s.aircraft}` : ''}.`];
+  const name = aircraftTitle();
+  return ['ok', (s.paused ? 'paused' : 'in flight') + (name ? ` \u00b7 ${name}` : ''), `In a flight${s.paused ? ' (paused)' : ''}${name ? `: ${name}` : ''}.`];
+}
+// The loaded aircraft's name as the sim shows it (its title), else its folder name.
+function aircraftTitle() {
+  const s = shell.status?.sim;
+  if (!s?.aircraft) return '';
+  return typeof acName === 'function' ? acName(s.aircraft) : s.title || s.aircraft;
 }
 function hookVersionOk() {
   const v = shell.status?.hook?.versions ?? [], mine = shell.welcome?.version;
@@ -33,7 +39,7 @@ function hookState() {
   const h = shell.status?.hook, s = shell.status?.sim;
   if (!connected || !s?.connected) return ['idle', '\u2014', 'Reports when MSFS runs a flight.'];
   if (h?.connected && !hookVersionOk()) return ['warn', 'outdated', `Active, but version ${(h.versions ?? []).join(', ')} (CockpitCast is ${shell.welcome?.version}). Reinstall it in Sim add-on.`];
-  if (h?.connected) return ['ok', 'active', `Active: ${h.pages ?? 0} instrument page${h.pages === 1 ? '' : 's'} reported.`];
+  if (h?.connected) return ['ok', 'active', `${h.pages ?? 0} instrument page${h.pages === 1 ? '' : 's'} reported`];
   if (s.inFlight && (s.liveForSec ?? 0) > 30) return ['bad', 'not detected', 'In a flight, but the hook has not reported. Is it installed in the Community folder MSFS reads? See Sim add-on.'];
   return ['idle', 'waiting', 'Waiting for a flight to load.'];
 }
@@ -45,13 +51,14 @@ function captureState() {
   if (!connected || !s?.connected) return ['idle', '\u2014', 'Starts with a flight.'];
   if (!c?.connected) return s.inFlight ? ['warn', 'starting', `Not loaded yet (injector: ${c?.injector ?? '?'}). It loads about 10 s after a flight is live.`] : ['idle', 'waiting', 'Loads when a flight is live.'];
   const live = liveDisplays();
-  return ['ok', live.length ? live.join(', ') : 'ready', live.length ? `Capturing ${live.join(', ')}.` : 'Loaded in the sim; nothing is captured until a screen shows a glass display.'];
+  return ['ok', live.length ? live.join(', ') : 'ready', live.length ? 'captured for your screens' : 'nothing needed right now: no screen shows a glass display'];
 }
 function appsState() {
   const a = shell.apps;
   if (!connected || !a) return ['idle', '\u2014', ''];
-  if (!a.apps) return ['idle', 'none', 'No display app connected. Start the CockpitCast display app on a display PC: it finds this PC by itself.'];
-  return ['ok', `${a.apps}${a.paused ? ` (${a.paused} paused)` : ''}`, `${a.apps} display app${a.apps === 1 ? '' : 's'} connected${a.paused ? `, ${a.paused} paused` : ''}.`];
+  if (!a.apps) return ['idle', 'none', 'Start the display app on a display PC, phone or tablet: it finds this PC by itself.'];
+  const names = (a.list ?? []).filter((x) => x.kind === 'app').map((x) => `${x.name}${x.shows ? `: ${x.shows.replace(/^screen \d+: /, '')}` : ''}`);
+  return ['ok', `${a.apps} connected${a.paused ? `, ${a.paused} paused` : ''}`, names.join(' \u00b7 ')];
 }
 function updateInfo() {
   return shell.status?.update ?? null;
@@ -92,17 +99,31 @@ function renderSide() {
   $('navSettingsDot').className = 'navdot ' + (u?.available ? 'ok' : '');
 }
 
-// ---- Status section ----
+// ---- Status section: the flight on top, then the way to the screens (hook, capture, apps, this PC) ----
 function renderStatusPage() {
-  const card = (title, [state, short, long], tab, extra = '') => `<div class="stcard ${state}">
-    <div class="h">${esc(title)}</div><div class="v">${esc(short)}</div><div class="d">${esc(long)}${extra}</div>
-    ${tab ? `<a href="#${tab}" data-go="${tab}">${{ addon: 'Sim add-on', help: 'Help', screens: 'Screens', settings: 'Settings' }[tab]} \u203a</a>` : ''}</div>`;
-  const local = localState === 'none' ? ['idle', 'not used', 'Screens can also show on monitors of this PC: "On this PC" in Screens.']
-    : localState === 'on' ? ['ok', 'on', 'Screens set to "On this PC" are shown here.'] : ['idle', 'off', 'Turned off. Switch them on in Screens or the tray menu.'];
-  const hostCard = connected ? ['ok', 'running', `CockpitCast ${shell.welcome?.version ?? ''} on ${shell.welcome?.host ?? location.host}.`] : ['bad', 'not connected', 'CockpitCast is not running (start it from the Start menu) or not reachable. Retrying.'];
-  $('stCards').innerHTML = card('CockpitCast', hostCard, '') + card('MSFS', simState(), '') + card('Sim add-on (hook)', hookState(), 'addon')
-    + card('Glass capture', captureState(), 'help') + card('Display apps', appsState(), 'help') + card('Screens on this PC', local, 'screens');
-  // Things to fix, with where.
+  const s = shell.status?.sim;
+  const [cs] = captureState();
+  const glass = liveDisplays();
+  const hero = !connected ? ['bad', 'CockpitCast', 'Not connected', 'CockpitCast is not running, or not reachable. Start it from the Start menu; this window reconnects by itself.', 'offline']
+    : !s?.connected ? ['idle', 'MSFS', 'Not running', 'Start MSFS and load a flight: the screens follow by themselves.', 'waiting']
+    : !s.inFlight ? ['idle', 'MSFS', 'In the menu', 'Load a flight: the screens follow by themselves.', 'menu']
+    : [s.paused ? 'warn' : 'ok', s.paused ? 'Paused' : 'In flight', aircraftTitle() || 'Unknown aircraft',
+      glass.length ? `Glass cockpit \u00b7 ${glass.join(', ')} captured` : cs === 'ok' ? 'Steam gauges are drawn from the sim\'s data' : 'Getting the displays ready\u2026', s.paused ? 'paused' : 'live'];
+  $('hero').className = 'hero ' + hero[0];
+  $('heroK').textContent = hero[1];
+  $('heroT').textContent = hero[2];
+  $('heroS').textContent = hero[3];
+  $('heroPill').className = 'pill ' + hero[0];
+  $('heroPill').textContent = hero[4];
+  const local = localState === 'none' ? ['idle', 'not used', 'Show screens on this PC\'s monitors: "On this PC" in Screens']
+    : localState === 'on' ? ['ok', 'on', 'screens set to "On this PC" show here'] : ['idle', 'off', 'turned off (Screens or the tray menu)'];
+  const step = (label, [st, v, d], go) => `<${go ? `a href="#${go}" data-go="${go}"` : 'div'} class="step ${st}"><div class="sl"><span>${esc(label)}</span>${go ? '<span>\u203a</span>' : ''}</div><div class="sv">${esc(v)}</div><div class="sd">${esc(d)}</div></${go ? 'a' : 'div'}>`;
+  $('stFlow').innerHTML = step('Sim add-on', hookState(), 'addon') + step('Glass capture', captureState(), '')
+    + step('Display apps', appsState(), 'help') + step('Screens on this PC', local, 'screens');
+  renderStatusWarnings();
+}
+// Things to fix, with where.
+function renderStatusWarnings() {
   const w = [];
   const u = updateInfo();
   if (shell.status?.elevated) w.push(['bad', '<b>CockpitCast is running as administrator.</b> It can then be refused folders you can open (such as the MS Store sim\'s Community folder). Quit it from the tray icon and start it normally from the Start menu.', '']);
@@ -191,8 +212,9 @@ function renderAppsTable() {
   box.innerHTML = `<div class="scwrap"><table class="dtable"><thead><tr><th>Device</th><th>Window</th><th>Shows</th><th>Receiving</th><th>Address</th><th>Version</th><th></th></tr></thead><tbody>${
     m.list.map((a) => {
       const recv = a.paused ? '<span class="bad">paused</span>'
-        : [a.displays.length ? `${esc(a.displays.join(', '))} \u00b7 ${a.fps} fps` : '', a.gauges ? 'gauge data' : ''].filter(Boolean).join(' + ') || '<span class="sub">nothing</span>';
-      const kind = a.kind === 'settings' ? ' <span class="sub">(settings page)</span>' : '';
+        : [a.displays.length ? `${esc(a.displays.join(', '))} \u00b7 ${a.fps} fps` : '', a.gauges ? 'gauge data' : ''].filter(Boolean).join(' + ')
+          || `<span class="sub">${a.kind === 'settings' ? 'settings open' : a.shows ? 'waiting for the sim' : 'idle: no screen assigned'}</span>`;
+      const kind = a.settingsOpen ? ' <span class="sub">(settings open)</span>' : a.kind === 'settings' ? ' <span class="sub">(settings)</span>' : '';
       const actions = a.canPause
         ? `<button class="icon" data-app="${a.id}" data-a="identify" title="Show this app's name on its screen for a few seconds">Identify</button> <button class="icon" data-app="${a.id}" data-a="${a.paused ? 'resume' : 'pause'}" title="${a.paused ? 'Start sending to it again' : 'Send it nothing (no capture for it), until resumed'}">${a.paused ? 'Resume' : 'Pause'}</button>`
         : '';
@@ -214,7 +236,11 @@ async function loadInstruments() {
     if (ri.status === 403) return void (box.innerHTML = '<p class="hint">Only on the sim PC itself.</p>');
     const d = await ri.json();
     const reg = new Map((await rd.json()).displays.map((x) => [x.id, x]));
-    $('diagInstAc').textContent = d.aircraft ? `\u00b7 ${d.aircraft}` : '';
+    const disp = d.current.map((i) => (i.capturedAs ? reg.get(i.capturedAs) : null)).filter(Boolean);
+    const prim = disp.filter((x) => x.primary).map((x) => x.name);
+    const other = d.current.length - prim.length;
+    $('diagInstAc').textContent = !d.current.length ? '\u00b7 no flight loaded'
+      : `\u00b7 ${prim.length ? `${prim.join(', ')} primary` : 'no primary display'}${other ? ` \u00b7 ${other} other instrument${other === 1 ? '' : 's'}` : ''}`;
     if (!d.current.length) return void (box.innerHTML = '<p class="hint">No instrument pages reported yet. Load a flight (the hook must be installed).</p>' + learnedList(reg));
     box.innerHTML = `<div class="scwrap"><table class="dtable"><thead><tr><th>Instrument</th><th>Size</th><th>Display</th><th></th><th>Details</th></tr></thead><tbody>${
       d.current.map((i) => {
@@ -225,7 +251,7 @@ async function loadInstruments() {
         return `<tr><td><code>${esc(i.key)}</code></td><td>${i.w}\u00d7${i.h}</td><td>${status}</td><td class="nowrap">${actions}</td><td class="sub">${esc(i.templateID || i.url || '')}</td></tr>`;
       }).join('')
     }</tbody></table></div>
-    <p class="hint">Instruments the sim draws on their own page, largest first. They become displays by themselves and are remembered on this PC. <b>Primary</b> displays (PFD, MFD, EICAS...) make a cockpit a glass cockpit for the screens.</p>` + learnedList(reg, d.current);
+    <p class="hint">Largest first. Displays are remembered on this PC.</p>` + learnedList(reg, d.current);
   } catch {
     box.innerHTML = '<p class="hint">CockpitCast is not reachable.</p>';
   }
@@ -309,7 +335,8 @@ function renderShell() {
 let instTimer = null;
 function shellTab(tab) {
   clearInterval(instTimer);
-  if (tab === 'help') { loadTrouble(); loadInstruments(); instTimer = setInterval(() => !document.hidden && loadInstruments(), 10000); }
+  if (tab === 'help') loadTrouble();
+  if (tab === 'screens') { loadInstruments(); instTimer = setInterval(() => !document.hidden && loadInstruments(), 10000); }
   if (tab === 'addon') loadTrouble();
   if (tab === 'settings') loadStartup();
   renderShell();
