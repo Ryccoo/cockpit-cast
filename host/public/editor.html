@@ -716,7 +716,9 @@ function renderScreens(force) {
     const n = Object.keys(aircraftDraft[a] || {}).length;
     h += `<th title="${esc(a)}"><span class="an">${esc(acName(a))}</span> ${a === loadedAircraft ? '<span class="badge">loaded now</span>' : ''}
       <div class="sub">${esc(acName(a) !== a ? a : 'its full name shows once it is loaded')}</div>
-      <div class="row"><button class="icon" data-prev="${esc(a)}">Preview</button>${n ? `<button class="icon danger" data-clear="${esc(a)}" title="Remove this aircraft's own choices">Reset</button>` : ''}</div></th>`;
+      <div class="row"><button class="icon" data-prev="${esc(a)}">Preview</button>${a !== loadedAircraft
+        ? `<button class="icon danger" data-remove="${esc(a)}" data-n="${n}" title="Remove this aircraft's column${n ? ' and its own choices' : ''}">Remove</button>`
+        : n ? `<button class="icon danger" data-clear="${esc(a)}" title="Remove this aircraft's own choices (the loaded aircraft always has a column)">Reset</button>` : ''}</div></th>`;
   }
   h += '</tr></thead><tbody>';
   screensDraft.forEach((d, i) => {
@@ -770,6 +772,22 @@ function renderScreens(force) {
   };
   for (const b of $('scTable').querySelectorAll('[data-del]')) b.onclick = () => { screensDraft.splice(+b.dataset.del, 1); screensChanged(); renderScreens(true); };
   for (const b of $('scTable').querySelectorAll('[data-prev]')) b.onclick = () => { previewAircraft = b.dataset.prev; $('preview').classList.add('open'); renderPreview(); updateSubs(); };
+  // Remove an aircraft's column, and its own choices (asks first when it has some).
+  for (const b of $('scTable').querySelectorAll('[data-remove]')) b.onclick = () => {
+    const a = b.dataset.remove, hasChoices = +b.dataset.n > 0;
+    if (hasChoices && !b.classList.contains('armed')) {
+      b.classList.add('armed');
+      b.textContent = 'Sure?';
+      setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Remove'; }, 3000);
+      return;
+    }
+    extraCols = extraCols.filter((x) => x !== a);
+    if (aircraftDraft[a]) {
+      delete aircraftDraft[a];
+      screensChanged();
+    }
+    renderScreens(true);
+  };
   for (const b of $('scTable').querySelectorAll('[data-clear]')) b.onclick = () => {
     if (!b.classList.contains('armed')) {
       b.classList.add('armed');
