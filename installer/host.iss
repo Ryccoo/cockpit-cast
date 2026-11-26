@@ -11,7 +11,7 @@
 ; Learned displays, layouts and logs live in %LOCALAPPDATA%\CockpitCast (kept on uninstall unless chosen).
 
 #ifndef AppVersion
-  #define AppVersion "0.2.4"
+  #define AppVersion "0.2.5-beta.1"
 #endif
 
 [Setup]
