@@ -31,12 +31,16 @@ OutputBaseFilename=CockpitCast-Host-{#AppVersion}-Setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-; The second mutex is the tray's under the project's former name (up to 0.1.1).
-AppMutex=Local\CockpitCastTray,Local\CockpitLinkTray
+; No AppMutex: setup and the uninstaller close a running CockpitCast themselves (CloseCockpitCast in
+; [Code]); AppMutex only told people to close it, which needs the tray icon's menu or Task Manager.
 ; Install into the folder named after the current name, not into an old install's folder.
 UsePreviousAppDir=no
 UsePreviousGroup=no
 CloseApplications=yes
+; Programs only: the sim keeps bin\cockpitcast-capture.dll loaded, and with the default filter (which
+; includes *.dll) Windows' Restart Manager would offer to close the sim. PrepareToInstall moves that DLL
+; aside instead.
+CloseApplicationsFilter=*.exe
 UninstallDisplayIcon={app}\cockpitcast.exe
 UninstallDisplayName=CockpitCast (host)
 #ifexist "..\LICENSE"
@@ -52,6 +56,9 @@ Type: files; Name: "{userprograms}\Cockpit Link\Repair Community hook.lnk"
 Type: files; Name: "{userprograms}\Cockpit Link\Uninstall Cockpit Link.lnk"
 Type: dirifempty; Name: "{userprograms}\Cockpit Link"
 Type: files; Name: "{userstartup}\Cockpit Link.lnk"
+; Capture DLLs moved aside by earlier installs while the sim had them loaded (PrepareToInstall). One the
+; sim still has loaded is not deleted (no error); a later install removes it.
+Type: files; Name: "{app}\bin\*.old"
 
 [Tasks]
 Name: hook; Description: "Install the Community hook into MSFS 2024 (close the sim first)"
@@ -78,10 +85,93 @@ Filename: "{app}\node\node.exe"; Parameters: """{app}\hook\install-hook.mjs"" --
 Type: filesandordirs; Name: "{app}\hook\dist"
 
 [Code]
+const
+  WM_CLOSE = $0010;
+  // The tray's single-instance mutexes and window classes (the second: the former name, up to 0.1.1).
+  TrayMutexes = 'Local\CockpitCastTray,Local\CockpitLinkTray';
+
 // Started by CockpitCast's own updater.
 function IsUpdate: Boolean;
 begin
   Result := ExpandConstant('{param:UPDATE|0}') = '1';
+end;
+
+function TrayRunning: Boolean;
+begin
+  Result := CheckForMutexes(TrayMutexes);
+end;
+
+function WaitTrayGone(Seconds: Integer): Boolean;
+var
+  I: Integer;
+begin
+  for I := 1 to Seconds * 4 do
+  begin
+    if not TrayRunning then
+      Break;
+    Sleep(250);
+  end;
+  Result := not TrayRunning;
+end;
+
+// Ends a running CockpitCast host so its files can be replaced or removed. First the polite way: the
+// tray's window gets WM_CLOSE, it stops the host (up to 5 s) and exits. If that does not work, the
+// host's processes are ended: cockpitcast.exe next to a host\src\index.mjs (not the display app, which
+// has the same name in another folder) and node.exe running host\src\index.mjs. Our own updater has
+// already closed the tray (and released the mutex) before it starts setup, so nothing happens then.
+function CloseCockpitCast: Boolean;
+var
+  Wnd: HWND;
+  Code: Integer;
+begin
+  Result := True;
+  if not TrayRunning then
+    Exit;
+  Wnd := FindWindowByClassName('CockpitCastTray');
+  if Wnd <> 0 then
+    PostMessage(Wnd, WM_CLOSE, 0, 0);
+  Wnd := FindWindowByClassName('CockpitLinkTray');
+  if Wnd <> 0 then
+    PostMessage(Wnd, WM_CLOSE, 0, 0);
+  if WaitTrayGone(10) then
+    Exit;
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+       '-NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { ' +
+       '($_.Name -eq ''node.exe'' -and $_.CommandLine -like ''*host\src\index.mjs*'') -or ' +
+       '($_.Name -eq ''cockpitcast.exe'' -and $_.ExecutablePath -and ' +
+       '(Test-Path (Join-Path (Split-Path $_.ExecutablePath) ''host\src\index.mjs''))) } | ' +
+       'ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Result := WaitTrayGone(5);
+end;
+
+function InitializeSetup: Boolean;
+begin
+  Result := CloseCockpitCast;
+  if not Result then
+    SuppressibleMsgBox('CockpitCast is running and could not be closed. Right-click its tray icon, choose ' +
+                       '"Quit CockpitCast host", then run setup again.', mbError, MB_OK, IDOK);
+end;
+
+function InitializeUninstall: Boolean;
+begin
+  Result := CloseCockpitCast;
+  if not Result then
+    MsgBox('CockpitCast is running and could not be closed. Right-click its tray icon, choose ' +
+           '"Quit CockpitCast host", then uninstall again.', mbError, MB_OK);
+end;
+
+// The sim keeps the capture DLL loaded until it exits, so it cannot be overwritten then; a loaded DLL
+// can be renamed, though. Move it aside: the new one is installed under the real name and used from the
+// next injection (the next sim start); [InstallDelete] removes the old copies later.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Dll: String;
+begin
+  Result := '';
+  Dll := ExpandConstant('{app}\bin\cockpitcast-capture.dll');
+  if FileExists(Dll) and not DeleteFile(Dll) then
+    RenameFile(Dll, Dll + '.' + GetDateTimeString('yyyymmddhhnnss', #0, #0) + '.old');
 end;
 
 // Runs hook\setup-hook.mjs with Extra arguments; its exit code (-1 if it could not start).
