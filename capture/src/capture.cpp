@@ -620,7 +620,12 @@ int ShareEntry(Display& d) {
 // Shared textures of the display's size and format family; created again when either changes.
 bool EnsureShareTextures(Display& d, UINT w, UINT h, DXGI_FORMAT srcFormat) {
     DXGI_FORMAT fmt = IsBgra(srcFormat) ? DXGI_FORMAT_B8G8R8A8_TYPELESS : DXGI_FORMAT_R8G8B8A8_TYPELESS;
-    if (d.share[0].tex && d.shareW == w && d.shareH == h && d.shareFmt == fmt) return true;
+    if (d.share[0].tex && d.shareW == w && d.shareH == h && d.shareFmt == fmt) {
+        // Shown locally again before the idle textures were freed (local screens off and on quickly):
+        // the entry was marked inactive; mark it active again, or the viewer waits for nothing.
+        if (g_share && d.shareEntry >= 0 && !g_share->displays[d.shareEntry].active) InterlockedExchange(&g_share->displays[d.shareEntry].active, 1);
+        return true;
+    }
     for (auto& sh : d.share)
         if (sh.copying) return false;  // a copy into the old ones is in flight: next frame
     int entry = ShareEntry(d);

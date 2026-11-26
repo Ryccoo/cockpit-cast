@@ -314,7 +314,8 @@ void ReleaseDevice() {
     g_d2d = nullptr;
     for (auto& [k, o] : g_opened) o.Release();
     g_opened.clear();
-    for (auto& s : g_screens) ReleaseChain(*s);
+    for (auto& s : g_screens)
+        if (s) ReleaseChain(*s);
     for (IUnknown** p : {(IUnknown**)&g_vs, (IUnknown**)&g_ps, (IUnknown**)&g_sampler, (IUnknown**)&g_cb, (IUnknown**)&g_dev1, (IUnknown**)&g_ctx,
                          (IUnknown**)&g_dev, (IUnknown**)&g_factory})
         if (*p) {
@@ -327,7 +328,7 @@ void ReleaseDevice() {
 // windows; always-on-top ones above the other topmost windows, the taskbar included.
 void RaiseScreens() {
     for (auto& s : g_screens)
-        if (s->hwnd) SetWindowPos(s->hwnd, s->onTop ? HWND_TOPMOST : HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if (s && s->hwnd) SetWindowPos(s->hwnd, s->onTop ? HWND_TOPMOST : HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
 LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
@@ -352,7 +353,7 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             return 1;
         case WM_SIZE:
             for (auto& s : g_screens)
-                if (s->hwnd == h) s->dirty = true;
+                if (s && s->hwnd == h) s->dirty = true;
             return 0;
         case WM_DISPLAYCHANGE:
             PostMessageW(nullptr, WM_DISPLAYCHANGE, 0, 0);
@@ -546,11 +547,13 @@ bool Tick() {
         if (want.LowPart != g_devLuid.LowPart || want.HighPart != g_devLuid.HighPart) {
             LogLine("using the sim's graphics card for local screens");
             if (!CreateDevice(&want)) return true;
-            for (auto& s : g_screens) s->dirty = true;
+            for (auto& s : g_screens)
+                if (s) s->dirty = true;
         }
     }
     if (!g_dev) return CreateDevice(nullptr);
     for (auto& sp : g_screens) {
+        if (!sp) continue;
         Screen& s = *sp;
         int entry = share && !s.display.empty() ? FindEntry(s.display) : -1;
         if (entry >= 0 && g_share->displays[entry].latest < 0) entry = -1;  // set up, no picture yet
@@ -707,7 +710,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
                 return 0;
             } else if (msg.message == WM_DISPLAYCHANGE && !msg.hwnd) {
                 ReadMonitors();
-                for (auto& s : g_screens) Place(*s);
+                for (auto& s : g_screens)
+                    if (s) Place(*s);
             } else {
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
@@ -722,7 +726,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         if (GetTickCount64() >= nextRaise) {
             nextRaise = GetTickCount64() + 2000;
             for (auto& s : g_screens)
-                if (s->hwnd && s->onTop) SetWindowPos(s->hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                if (s && s->hwnd && s->onTop) SetWindowPos(s->hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
         if (GetTickCount64() >= nextStats) {
             nextStats = GetTickCount64() + 5000;
