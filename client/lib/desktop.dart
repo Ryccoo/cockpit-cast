@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'log.dart';
 import 'settings.dart';
 
 bool get isDesktop => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -30,6 +31,16 @@ class MonitorInfo {
 Future<void> initDesktopWindow() async {
   if (!isDesktop) return;
   await windowManager.ensureInitialized();
+  windowManager.addListener(_WindowLog());
+}
+
+/// Window events in the log (not every step of a move or resize: the app's metrics log covers those).
+class _WindowLog with WindowListener {
+  @override
+  void onWindowEvent(String eventName) {
+    if (eventName == 'move' || eventName == 'resize') return;
+    AppLog.info('window', eventName);
+  }
 }
 
 Future<List<MonitorInfo>> listMonitors() async {
@@ -63,6 +74,7 @@ Future<void> placeWindow(OutputConfig o, {String? title}) async {
     if (title != null) await windowManager.setTitle(title);
     final monitors = await listMonitors();
     final m = findMonitor(monitors, o);
+    AppLog.info('window', 'placing on ${m?.label ?? 'the current monitor'}${o.fullscreen ? ', full screen' : ''} (${monitors.length} monitors)');
     if (await windowManager.isFullScreen()) await windowManager.setFullScreen(false);
     if (m != null) {
       final pos = m.display.visiblePosition ?? Offset.zero;
@@ -73,8 +85,9 @@ Future<void> placeWindow(OutputConfig o, {String? title}) async {
     if (o.fullscreen) await windowManager.setFullScreen(true);
     await windowManager.show();
     await windowManager.focus();
-  } catch (_) {
+  } catch (e) {
     // Placement is a nicety: if the platform refuses, the window simply stays where it is.
+    AppLog.warn('window', 'placing the window failed: $e');
   }
 }
 
@@ -99,18 +112,28 @@ Future<void> startExtraWindows(Settings s) async {
     final args = ['--child', '--output', '$i', if (s.profile.isNotEmpty) ...['--profile', s.profile]];
     try {
       _children.add(await Process.start(Platform.resolvedExecutable, args, mode: ProcessStartMode.detachedWithStdio));
-    } catch (_) {}
+      AppLog.info('window', 'started window ${i + 1} (pid ${_children.last.pid})');
+    } catch (e) {
+      AppLog.error('window', 'could not start window ${i + 1}: $e');
+    }
   }
 }
 
 Future<void> stopExtraWindows() async {
+  if (_children.isNotEmpty) AppLog.info('window', 'stopping ${_children.length} extra window(s)');
   for (final p in _children) {
     p.kill();
   }
   _children.clear();
 }
 
-/// Close the extra windows when window 1 closes.
+/// Closing a window (its close button, Alt+F4, an installer or update closing the app): window 1 also
+/// stops the extra windows. Every window then ends its process straight away.
+///
+/// Not windowManager.destroy(): letting the Flutter engine tear the window down crashes it on Windows
+/// (Flutter 3.50: an access violation in flutter::FlutterWindowsView::GetEngine while a window message
+/// is handled, 0xC0000005 then 0xC000041D), every time. Nothing is left to save at that point: settings
+/// are saved when the user saves them, and the log is written line by line.
 class ExtraWindowsCloser with WindowListener {
   static final ExtraWindowsCloser instance = ExtraWindowsCloser._();
   ExtraWindowsCloser._();
@@ -123,8 +146,9 @@ class ExtraWindowsCloser with WindowListener {
 
   @override
   void onWindowClose() async {
+    AppLog.info('app', 'closing');
     await stopExtraWindows();
-    await windowManager.destroy();
+    exit(0);
   }
 }
 

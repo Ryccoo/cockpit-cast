@@ -18,6 +18,7 @@ import 'desktop.dart';
 import 'discovery.dart';
 import 'displays_screen.dart';
 import 'host_connection.dart';
+import 'log.dart';
 import 'protocol.dart';
 import 'settings.dart';
 import 'updater.dart';
@@ -294,6 +295,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Slider(value: s.maxFps.toDouble(), min: 5, max: 60, divisions: 11, label: '${s.maxFps}', onChanged: (v) => setState(() => s.maxFps = v.round())),
               ]),
               _updatesSection(section),
+              _logsSection(section),
               if (message != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(message!, style: TextStyle(color: theme.colorScheme.error))),
               FilledButton.icon(icon: const Icon(Icons.play_arrow), label: const Text('Save and start'), onPressed: _saveAndStart),
               const SizedBox(height: 8),
@@ -312,6 +314,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  // Logs: open the folder, or (Windows) save them to the desktop with Windows' records of recent
+  // crashes, ready to send with a bug report.
+  Widget _logsSection(Widget Function(String, List<Widget>) section) {
+    final folder = AppLog.folder;
+    return section('Logs', [
+      Text(folder == null
+          ? 'No log file (the log folder cannot be written).'
+          : 'What this app did, for bug reports: $folder'),
+      const SizedBox(height: 8),
+      if (folder != null && isDesktop)
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          OutlinedButton.icon(icon: const Icon(Icons.folder_open), label: const Text('Open logs folder'), onPressed: () => _openFolder(folder)),
+          if (Platform.isWindows)
+            OutlinedButton.icon(icon: const Icon(Icons.archive_outlined), label: const Text('Save logs to desktop'), onPressed: () => _saveLogs(folder)),
+        ]),
+    ]);
+  }
+
+  Future<void> _openFolder(String folder) async {
+    try {
+      await Process.start(Platform.isWindows ? 'explorer.exe' : Platform.isMacOS ? 'open' : 'xdg-open', [folder]);
+    } catch (e) {
+      AppLog.warn('app', 'cannot open $folder: $e');
+    }
+  }
+
+  /// CockpitCast-logs.zip on the desktop: all CockpitCast logs on this PC (the host's too, on the sim PC)
+  /// and Windows' records of crashes and errors from the last 3 hours.
+  Future<void> _saveLogs(String folder) async {
+    final messenger = ScaffoldMessenger.of(context);
+    AppLog.info('app', 'saving the logs to the desktop');
+    const script = r'''
+$ErrorActionPreference = 'SilentlyContinue'
+$out = Join-Path $env:TEMP ('cockpitcast-report-' + (Get-Date -Format yyyyMMdd-HHmmss)); New-Item -ItemType Directory $out | Out-Null
+Copy-Item "$env:LOCALAPPDATA\CockpitCast\logs\*" $out
+Copy-Item "$env:LOCALAPPDATA\CockpitCast\client-update.log" $out
+Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddHours(-3); Id=1000,1001,1002} | Format-List TimeCreated, Id, ProviderName, Message | Out-File "$out\windows-app-errors.txt" -Width 300
+Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=(Get-Date).AddHours(-3); Level=1,2,3} | Format-List TimeCreated, Id, ProviderName, Message | Out-File "$out\windows-system-errors.txt" -Width 300
+$zip = Join-Path ([Environment]::GetFolderPath('Desktop')) 'CockpitCast-logs.zip'
+Compress-Archive -Path "$out\*" -DestinationPath $zip -Force
+if (Test-Path $zip) { $zip } else { exit 1 }
+''';
+    try {
+      final r = await Process.run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
+      final zip = '${r.stdout}'.trim();
+      if (r.exitCode != 0 || zip.isEmpty) throw 'PowerShell: ${'${r.stderr}'.trim()}';
+      messenger.showSnackBar(SnackBar(content: Text('Saved $zip')));
+    } catch (e) {
+      AppLog.warn('app', 'saving the logs failed: $e');
+      messenger.showSnackBar(SnackBar(content: Text('Could not save the logs: $e')));
+    }
   }
 
   Widget _updatesSection(Widget Function(String, List<Widget>) section) {

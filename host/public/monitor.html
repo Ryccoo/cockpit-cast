@@ -109,8 +109,9 @@
   </details>
 
   <details>
-    <summary>Send logs with a bug report</summary>
-    <p>This puts CockpitCast's logs into <code>CockpitCast-logs.zip</code> on your desktop, to attach to a message or a GitHub issue. The logs contain this PC's name, folder paths and aircraft names, nothing else personal.</p>
+    <summary>Logs: look at them, or send them with a bug report</summary>
+    <p>All CockpitCast logs on this PC are in one folder: the host (<code>host.log</code>), the capture module in the sim (<code>capture.log</code>), the hook setup, and the display app if it runs here (<code>client.log</code>; on a display PC: Settings &rsaquo; Logs in the app). The previous run's are kept as <code>*.1.log</code>. <button id="btnOpenLogs" type="button">Open logs folder</button> <span id="openLogsMsg" class="dim"></span></p>
+    <p>For a bug report, this puts them into <code>CockpitCast-logs.zip</code> on your desktop, with Windows' records of crashes from the last 3 hours, to attach to a message or a GitHub issue. They contain this PC's name, user name, folder paths and aircraft names, nothing else personal.</p>
     <div class="cmd"><pre id="cmdLogs"></pre><button data-copy="cmdLogs">Copy</button></div>
   </details>
 </details>
@@ -238,10 +239,24 @@ function renderTrouble() {
   document.getElementById('cmdWhere').textContent =
     'Select-String -Path "$env:APPDATA\\Microsoft Flight Simulator 2024\\UserCfg.opt", "$env:LOCALAPPDATA\\Packages\\Microsoft.Limitless_8wekyb3d8bbwe\\LocalCache\\UserCfg.opt" -Pattern InstalledPackagesPath -ErrorAction SilentlyContinue';
   const logs = trouble.logs ? psq(trouble.logs + '\\*') : '"$env:LOCALAPPDATA\\CockpitCast\\logs\\*"';
-  document.getElementById('cmdLogs').textContent =
-    `Compress-Archive -Path ${logs} -DestinationPath "$([Environment]::GetFolderPath('Desktop'))\\CockpitCast-logs.zip" -Force`;
+  document.getElementById('cmdLogs').textContent = [
+    `$out = Join-Path $env:TEMP ('cockpitcast-report-' + (Get-Date -Format yyyyMMdd-HHmmss)); New-Item -ItemType Directory $out | Out-Null`,
+    `Copy-Item ${logs} $out; Copy-Item "$env:LOCALAPPDATA\\CockpitCast\\client-update.log" $out -ErrorAction SilentlyContinue`,
+    `Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddHours(-3); Id=1000,1001,1002} -ErrorAction SilentlyContinue | Format-List TimeCreated, Id, ProviderName, Message | Out-File "$out\\windows-app-errors.txt" -Width 300`,
+    `Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=(Get-Date).AddHours(-3); Level=1,2,3} -ErrorAction SilentlyContinue | Format-List TimeCreated, Id, ProviderName, Message | Out-File "$out\\windows-system-errors.txt" -Width 300`,
+    `Compress-Archive -Path "$out\\*" -DestinationPath "$([Environment]::GetFolderPath('Desktop'))\\CockpitCast-logs.zip" -Force; 'Saved: CockpitCast-logs.zip on the desktop'`,
+  ].join('\n');
 }
 document.getElementById('tFolder').oninput = renderTrouble;
+document.getElementById('btnOpenLogs').onclick = async () => {
+  const msg = document.getElementById('openLogsMsg');
+  try {
+    const r = await fetch('/api/open-logs', { method: 'POST' });
+    msg.textContent = r.status === 403 ? 'Only on the sim PC itself (this page is open from another computer).' : r.ok ? '' : 'Could not open it.';
+  } catch (e) {
+    msg.textContent = e.message;
+  }
+};
 document.getElementById('trouble').ontoggle = async (e) => {
   if (!e.target.open || trouble.node) return;
   try {

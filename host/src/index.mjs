@@ -6,6 +6,7 @@
 //   Community hook (every instrument page) --> InstrumentLog (what else the cockpit could stream)
 //   Tray icon (Windows): shows the host is running; click opens the layout editor
 
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig } from './config.mjs';
@@ -132,6 +133,13 @@ clients.addApi('POST', '/api/inject', () => injector.injectNow());
 const hookSetup = new HookSetup({ cfg, hook, version });
 clients.addApi('GET', '/api/hook-setup', () => hookSetup.status());
 clients.addApi('POST', '/api/hook-setup/reinstall', async (req) => hookSetup.reinstall((await readJson(req)).community));
+// The monitor's Troubleshooting section: open the logs folder in Explorer (on this PC; Windows).
+clients.addApi('POST', '/api/open-logs', () => {
+  const dir = path.dirname(cfg.logFile);
+  fs.mkdirSync(dir, { recursive: true });
+  if (process.platform === 'win32') spawn('explorer.exe', [dir], { detached: true, stdio: 'ignore' }).unref();
+  return { ok: process.platform === 'win32', dir };
+});
 // The monitor's Troubleshooting section: this PC's paths, for commands people can paste into PowerShell.
 clients.addApi('GET', '/api/troubleshoot', async () => {
   const h = await hookSetup.status();

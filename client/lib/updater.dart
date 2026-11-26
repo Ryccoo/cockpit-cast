@@ -23,6 +23,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'about.dart';
 import 'desktop.dart';
+import 'log.dart';
 
 const _releaseApi = 'https://api.github.com/repos/Ryccoo/cockpit-cast/releases/latest';
 const _releasesApi = 'https://api.github.com/repos/Ryccoo/cockpit-cast/releases?per_page=20';
@@ -84,10 +85,12 @@ class Updater extends ChangeNotifier {
       releaseUrl = j['html_url'] as String?;
       _assets = {for (final a in (j['assets'] as List? ?? const [])) '${a['name']}': '${a['browser_download_url']}'};
       error = null;
+      AppLog.info('update', 'latest${beta ? ' (with betas)' : ''}: $v; this is $appVersion${available ? ': update available' : ''}');
     } on _NoRelease {
       latest = null;
     } catch (e) {
       error = 'Update check failed: $e';
+      AppLog.warn('update', error!);
     }
     checkedAt = DateTime.now();
     notifyListeners();
@@ -120,6 +123,7 @@ class Updater extends ChangeNotifier {
       if (want == null) throw '$_sums has no checksum for $_asset';
       final data = await _getBytes(setupUrl);
       if (sha256.convert(data).toString() != want) throw 'the download does not match its checksum';
+      AppLog.info('update', 'downloaded $latest (${data.length} bytes, checksum OK); starting the installer and closing');
       final dir = await Directory.systemTemp.createTemp('cockpitcast-update');
       final file = File('${dir.path}\\CockpitCast-Client-$latest-Setup.exe');
       await file.writeAsBytes(data, flush: true);
@@ -137,6 +141,7 @@ class Updater extends ChangeNotifier {
       exit(0);
     } catch (e) {
       error = 'Update failed: $e';
+      AppLog.error('update', error!);
       busy = false;
       notifyListeners();
     }

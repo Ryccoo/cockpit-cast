@@ -363,7 +363,12 @@ keys. For example:
 | `http://localhost:8800/api/status` | Full state as JSON (sim PC only) |
 | `POST /api/inject` | Inject capture.dll now (when `autoInject` is off) |
 
-- **Logs:** `%LOCALAPPDATA%\CockpitCast\logs\` (`host.log`, `capture.log`, `update-install.log`).
+- **Logs:** `%LOCALAPPDATA%\CockpitCast\logs\`: `host.log`, `capture.log`, `hook-setup.log`,
+  `update-install.log`, and the display app's `client.log` (extra windows: `client-window2.log` ...)
+  when it runs on this PC. The previous run's are kept as `*.1.log`. To open the folder: the tray icon's
+  **Open logs folder**, the monitor's Troubleshooting section, or the display app's **Settings > Logs**
+  (on Linux the app logs to `~/.local/share/cockpitcast/logs/`). For a bug report, the monitor's
+  Troubleshooting section and the app's **Save logs to desktop** zip them with Windows' recent crash records.
 - **Saved layouts and screens:** `%LOCALAPPDATA%\CockpitCast\`.
 
 ## Troubleshooting
@@ -373,6 +378,8 @@ keys. For example:
 | Client does not find the host | Firewall: allow Node.js on private networks. Both devices on the same subnet? Type the address in Settings instead |
 | Displays stay "waiting" in a glass cockpit | Is the hook installed (`/api/status`: `hook.connected`)? Rebuilt after the last sim update? Monitor page: is the display listed, and marked primary? |
 | No frames after the flight loads | `capture.log` and `/api/status` (`injector`, `sources[].stats`). The injector tries once per sim session; restart the sim to retry |
+| The hook isn't installed or detected (moved add-ons, Addons Linker, MS Store version) | The monitor page's **Troubleshooting** section (`/#trouble-hook`): a ready-made command installs the hook into a Community folder you paste |
+| The display app crashes (Windows: "cockpitcast has stopped working") | Its log (Settings > Logs) and Windows' crash records: **Save logs to desktop** in the app, or the monitor's Troubleshooting section |
 | Another mod stopped working after installing the hook | Another Community package replaces the same file; only one can win |
 | Steam gauges show NO DATA | The host reads SimConnect only while a client shows gauges; check the sim state on the monitor page |
 | Windows: "Bad Image ... not designed to run on Windows", error status `0xc0e90002` | Smart App Control (Windows 11) blocked an unsigned file. Signed releases fix this; until then use a PC with Smart App Control off. Turning it off cannot be undone without resetting Windows, so think twice |

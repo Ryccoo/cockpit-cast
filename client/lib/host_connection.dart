@@ -5,10 +5,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:material_ui/material_ui.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'gauges/gauge_values.dart';
+import 'log.dart';
 import 'protocol.dart';
 import 'updater.dart';
 
@@ -32,7 +34,19 @@ class DisplayFeed extends ChangeNotifier {
   int _framesInWindow = 0;
   DateTime _windowStart = DateTime.now();
 
+  // For the log, since the last [takeStats].
+  int _received = 0, _shown = 0, _dropped = 0, _bad = 0;
+
+  /// "pfd: 1800 received, 1795 shown, 5 skipped, 0 bad, 1024x768", and starts counting again.
+  String takeStats() {
+    final s = '$id: $_received received, $_shown shown, $_dropped skipped, $_bad bad${width > 0 ? ', ${width}x$height' : ''}';
+    _received = _shown = _dropped = _bad = 0;
+    return s;
+  }
+
   void push(Frame f) {
+    _received++;
+    if (_pending != null) _dropped++;
     _pending = f;
     if (!_decoding) _decodeLatest();
   }
@@ -55,9 +69,11 @@ class DisplayFeed extends ChangeNotifier {
         width = f.width;
         height = f.height;
         _countFrame();
+        _shown++;
         notifyListeners();
-      } catch (_) {
+      } catch (e) {
         // A corrupt frame is skipped; the next one replaces it.
+        if (++_bad <= 3) AppLog.warn('frames', '$id: a frame could not be decoded: $e');
       }
     }
     _decoding = false;
@@ -125,6 +141,8 @@ class HostConnection extends ChangeNotifier {
   StreamSubscription? _sub;
   Timer? _retry;
   Timer? _staleTick;
+  Timer? _statsTick;
+  bool _downLogged = false;
   int _retryDelayMs = 500;
   bool _closed = false;
 
@@ -137,12 +155,14 @@ class HostConnection extends ChangeNotifier {
   void setShows(String shows) {
     if (shows == _shows) return;
     _shows = shows;
+    AppLog.info('screen', 'shows: $shows');
     _send(showsMessage(shows));
   }
 
   /// Sets which displays this client wants frames for.
   void want(Iterable<String> ids) {
     final next = ids.toSet();
+    if (!setEquals(next, _wanted)) AppLog.info('screen', 'displays wanted: ${next.isEmpty ? '(none)' : next.join(', ')} at up to $maxFps fps');
     for (final id in _wanted.difference(next)) {
       _send(unsubscribeMessage(id));
     }
@@ -188,6 +208,13 @@ class HostConnection extends ChangeNotifier {
   void start() {
     _closed = false;
     _staleTick ??= Timer.periodic(const Duration(milliseconds: 500), (_) => notifyListeners());
+    // Once a minute: how many frames came and were shown, per display.
+    _statsTick ??= Timer.periodic(const Duration(minutes: 1), (_) {
+      for (final id in _wanted) {
+        AppLog.info('frames', '${feed(id).takeStats()} in the last minute');
+      }
+    });
+    AppLog.info('link', 'connecting to $host:$port');
     _connect();
   }
 
@@ -205,6 +232,8 @@ class HostConnection extends ChangeNotifier {
     }
     if (_closed || _channel != ch) return;
     state = LinkState.connected;
+    AppLog.info('link', 'connected to $host:$port');
+    _downLogged = false;
     lastError = null;
     paused = false;
     _retryDelayMs = 500;
@@ -237,6 +266,7 @@ class HostConnection extends ChangeNotifier {
     switch (msg['type']) {
       case 'welcome':
         hostName = msg['host'] as String?;
+        AppLog.info('link', 'host: $hostName, version ${msg['version'] ?? '?'}');
       case 'displays':
         displays = [for (final d in (msg['displays'] as List? ?? const [])) DisplayInfo.fromJson((d as Map).cast<String, dynamic>())];
       case 'status':
@@ -244,12 +274,15 @@ class HostConnection extends ChangeNotifier {
         gaugeValues.setRefs({if (status.vfe != null) 'vfe': status.vfe!, if (status.vno != null) 'vno': status.vno!});
       case 'error':
         lastError = msg['message'] as String?;
+        AppLog.warn('link', 'host says: $lastError');
       case 'paused':
         paused = msg['paused'] == true;
+        AppLog.info('link', paused ? 'paused from the host' : 'resumed from the host');
       case 'identify':
         identifyUntil = DateTime.now().add(Duration(seconds: (msg['seconds'] as num?)?.toInt() ?? 8));
         Timer(Duration(seconds: (msg['seconds'] as num?)?.toInt() ?? 8), notifyListeners);
       case 'update': // the host is installing its update: the display PCs update too
+        AppLog.info('update', 'the host is installing an update');
         Updater.instance.updateFromHost();
         return;
       case 'layouts':
@@ -271,6 +304,9 @@ class HostConnection extends ChangeNotifier {
     _sub = null;
     _channel = null;
     if (_closed) return;
+    // Once per outage (retries repeat the same reason every few seconds).
+    if (!_downLogged) AppLog.warn('link', '$why; retrying');
+    _downLogged = true;
     state = LinkState.disconnected;
     lastError = why;
     notifyListeners();
@@ -284,10 +320,13 @@ class HostConnection extends ChangeNotifier {
   }
 
   void close() {
+    if (!_closed) AppLog.info('link', 'closed the connection to $host:$port');
     _closed = true;
     _retry?.cancel();
     _staleTick?.cancel();
     _staleTick = null;
+    _statsTick?.cancel();
+    _statsTick = null;
     _sub?.cancel();
     _channel?.sink.close();
     _channel = null;

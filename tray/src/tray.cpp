@@ -35,7 +35,7 @@ constexpr UINT WM_HOSTGONE = WM_APP + 3;  // the host's output closed (it exited
 constexpr UINT_PTR TIMER_RESTART = 1, TIMER_KILL = 2;
 constexpr int MAX_RESTARTS = 3;
 constexpr UINT ICON_ID = 1;
-constexpr UINT CMD_EDITOR = 1, CMD_MONITOR = 2, CMD_QUIT = 3, CMD_SUPPORT = 4, CMD_UPDATE = 5;
+constexpr UINT CMD_EDITOR = 1, CMD_MONITOR = 2, CMD_QUIT = 3, CMD_SUPPORT = 4, CMD_UPDATE = 5, CMD_LOGS = 6;
 
 HWND g_wnd = nullptr;
 UINT g_taskbarCreated = 0;
@@ -144,6 +144,14 @@ void Open(const std::wstring& url) {
   ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
+// %LOCALAPPDATA%\CockpitCast\logs: the host's logs, the capture DLL's, and the display app's on this PC.
+void OpenLogs() {
+  wchar_t dir[MAX_PATH] = L"";
+  ExpandEnvironmentStringsW(L"%LOCALAPPDATA%\\CockpitCast\\logs", dir, MAX_PATH);
+  CreateDirectoryW(dir, nullptr); // so Explorer opens it even before the first log
+  ShellExecuteW(nullptr, L"open", dir, nullptr, nullptr, SW_SHOWNORMAL);
+}
+
 void SendToHost(const char* line) {
   DWORD n = 0;
   if (g_toHost) WriteFile(g_toHost, line, (DWORD)strlen(line), &n, nullptr);
@@ -164,6 +172,7 @@ void ShowMenu(int x, int y) {
   HMENU m = CreatePopupMenu();
   AppendMenuW(m, MF_STRING, CMD_EDITOR, L"Open layout editor");
   AppendMenuW(m, MF_STRING, CMD_MONITOR, L"Open monitor");
+  AppendMenuW(m, MF_STRING, CMD_LOGS, L"Open logs folder");
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
   for (const auto& line : Lines(g_status)) AppendMenuW(m, MF_STRING | MF_GRAYED, 0, line.c_str());
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
@@ -177,6 +186,7 @@ void ShowMenu(int x, int y) {
   if (cmd == CMD_EDITOR) Open(g_editor);
   else if (cmd == CMD_MONITOR) Open(g_monitor);
   else if (cmd == CMD_SUPPORT) Open(g_support);
+  else if (cmd == CMD_LOGS) OpenLogs();
   else if (cmd == CMD_UPDATE) {
     SendToHost("update\n");
     Notify(L"CockpitCast", L"Downloading the update. CockpitCast restarts by itself when it is installed.", NIIF_INFO);
