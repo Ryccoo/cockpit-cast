@@ -14,7 +14,8 @@ const log = makeLog('clients');
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const MAX_BUFFERED = 1024 * 1024;
 // The CockpitCast window (editor.html + shell.js); /editor and the former monitor page lead to it too.
-const PAGES = { '/': 'editor.html', '/monitor.html': 'editor.html', '/editor': 'editor.html', '/editor.html': 'editor.html', '/shell.js': 'shell.js' }; // skip frames for a client with more than this unsent
+// /screen: one screen's layout, full window, for the local screen viewer (localScreens.mjs).
+const PAGES = { '/': 'editor.html', '/monitor.html': 'editor.html', '/editor': 'editor.html', '/editor.html': 'editor.html', '/shell.js': 'shell.js', '/screen': 'screen.html' }; // skip frames for a client with more than this unsent
 
 export class ClientServer {
   constructor({ port, hub, getStatus, getDetail = () => ({}), onWanted = () => {}, onDataWanted = () => {}, onInstallUpdate = null, onSetUpdateBeta = null, onCheckUpdate = null, onSetLocalScreens = null, layouts = null, screens = null, catalog = null, maxDataHz = 60, version, dataDir = null }) {
@@ -211,7 +212,9 @@ export class ClientServer {
         c.shows = str(msg.shows, 80);
         c.appVersion = str(msg.version, 16);
         c.platform = str(msg.platform, 16);
-        c.kind = c.name === 'Layout editor' ? 'editor' : c.name === 'Debug monitor' ? 'monitor' : msg.role === 'settings' ? 'settings' : 'app';
+        // 'local': a local screen's layout page (public/screen.html), part of CockpitCast itself: not listed
+        // as a display app, not counted as an open window.
+        c.kind = c.name === 'Layout editor' ? 'editor' : c.name === 'Debug monitor' ? 'monitor' : msg.role === 'settings' ? 'settings' : msg.role === 'local' ? 'local' : 'app';
         c.key = c.device ? `${c.device}|${c.window ?? ''}` : `${c.addr}|${c.name ?? ''}`;
         log.info(`client #${c.id} is "${c.name}"${c.window ? ` ${c.window}` : ''}${c.shows ? ` (${c.shows})` : ''} (protocol ${msg.protocol}${c.appVersion ? `, app ${c.appVersion}` : ''})`);
         if (c.kind === 'app' && this.paused.has(c.key)) this.setPaused(c, true, false);
@@ -386,7 +389,7 @@ export class ClientServer {
       if (c.kind === 'app' && c.name) {
         apps++;
         if (c.paused) paused++;
-      } else if (c.kind !== 'settings' && c.kind !== 'app') pages++;
+      } else if (c.kind === 'editor' || c.kind === 'monitor') pages++;
     }
     return { apps, paused, pages };
   }

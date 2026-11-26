@@ -4,7 +4,8 @@
 // Each local screen is a borderless window on any part of any monitor (full, a half, or a custom area),
 // so for example the PFD and the MFD can share one monitor side by side. A glass display is drawn straight
 // from the shared GPU textures cockpitcast-capture.dll fills inside the sim (capture/src/localshare.h):
-// no readback, no JPEG, no network.
+// no readback, no JPEG, no network. A screen showing a steam-gauge layout shows the host's /screen page
+// (host/public/screen.html) in a WebView2 browser view instead, filling the window.
 // Two modes (per window, "onTop" in the windows command; the editor's Screens tab sets it for all):
 //   always on top (default)  not in Alt+Tab, in front of every other window and put back above the
 //                            taskbar every 2 s, so the taskbar does not cover a cockpit monitor;
@@ -17,11 +18,13 @@
 //   {"type":"windows","windows":[{"id":"1","monitor":1,"area":"left","display":"pfd","fit":"contain","label":"PFD","note":null,"onTop":true}]}
 //     area: "full", "left", "right", "top", "bottom", or {"x":0,"y":0,"w":0.5,"h":1} (fractions of the monitor)
 //     display: the glass display to draw, or null (the window stays black)
+//     page: a URL to show instead (a layout: http://127.0.0.1:<port>/screen?screen=<id>), or null
 //     fit: "contain" (default; letterbox), "fill" (stretch), "cover" (crop to fill)
 //     label, note: shown dimly in the middle while there is no picture (the screen's name; why it is empty)
 // Viewer -> host (stdout, one JSON object per line):
 //   {"type":"monitors","monitors":[{"index":0,"name":"\\\\.\\DISPLAY1","x":0,"y":0,"w":2560,"h":1440,"primary":true}]}
 //   {"type":"stats","windows":[{"id":"1","display":"pfd","frames":1800,"state":"live"}]}   every 5 s
+//     state: "live", "waiting", "empty", or "page" (a layout in the browser view)
 //   {"type":"log","message":"..."}
 //   {"type":"action","action":"off"|"open"}   from a screen's right-click menu: turn local screens off,
 //                                             or show the CockpitCast window
@@ -38,6 +41,8 @@
 #include <dwrite.h>
 #include <dxgi1_2.h>
 #include <timeapi.h>
+#include <wrl.h>
+#include <WebView2.h>
 
 #include <algorithm>
 #include <cmath>
@@ -52,11 +57,16 @@
 #include "../../capture/src/json.h"
 #include "../../capture/src/localshare.h"
 
+using Microsoft::WRL::Callback;
+using Microsoft::WRL::ComPtr;
+
 namespace {
 
 const UINT WM_LINE = WM_APP + 1;     // lParam: new std::string (a line from the host)
 const UINT WM_HOSTGONE = WM_APP + 2;
 const wchar_t* kClass = L"CockpitCastScreen";
+
+std::wstring Wide(const std::string& s);
 
 // ---------------- output to the host ----------------
 std::mutex g_outMutex;
@@ -284,7 +294,12 @@ Opened* OpenEntry(int entry) {
 
 // ---------------- screen windows ----------------
 struct Screen {
-    std::string id, display, fit = "contain", label, note;
+    std::string id, display, fit = "contain", label, note, page;
+    // The browser view for a page (created when needed, closed when the screen shows something else).
+    ComPtr<ICoreWebView2Controller> wvc;
+    ComPtr<ICoreWebView2> wv;
+    std::string navigated;
+    bool wvCreating = false, wvFailed = false;
     std::wstring drawnText;  // the waiting text last drawn
     bool onTop = true;        // always on top (else a normal window); see the top of this file
     int monitor = 0;
@@ -331,22 +346,148 @@ void RaiseScreens() {
         if (s && s->hwnd) SetWindowPos(s->hwnd, s->onTop ? HWND_TOPMOST : HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
+// The way out of a screen that covers something: turn local screens off, or open CockpitCast. pt: screen
+// coordinates. Also from the layout page's right-click (a message from the browser view).
+void ShowMenu(HWND h, POINT pt) {
+    HMENU m = CreatePopupMenu();
+    AppendMenuW(m, MF_STRING, 1, L"Turn local screens off");
+    AppendMenuW(m, MF_STRING, 2, L"Open CockpitCast");
+    SetForegroundWindow(h);  // so the menu closes when clicking elsewhere
+    UINT cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.x, pt.y, 0, h, nullptr);
+    DestroyMenu(m);
+    if (cmd == 1) Out("{\"type\":\"action\",\"action\":\"off\"}");
+    else if (cmd == 2) AllowSetForegroundWindow(ASFW_ANY), Out("{\"type\":\"action\",\"action\":\"open\"}");
+}
+
+// ---------------- browser views (WebView2) for layouts ----------------
+// One environment for all screens; its data in %LOCALAPPDATA%\CockpitCast\screens-webview (not the
+// CockpitCast window's: another process).
+ComPtr<ICoreWebView2Environment> g_env;
+bool g_envCreating = false, g_envFailed = false;
+
+Screen* ByHwnd(HWND h) {
+    for (auto& s : g_screens)
+        if (s && s->hwnd == h) return s.get();
+    return nullptr;
+}
+
+void CloseWebView(Screen& s) {
+    if (s.wvc) s.wvc->Close();
+    s.wvc.Reset();
+    s.wv.Reset();
+    s.navigated.clear();
+}
+
+void EnsureEnv() {
+    if (g_env || g_envCreating || g_envFailed) return;
+    wchar_t base[MAX_PATH] = L"";
+    GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH);
+    std::wstring dir = std::wstring(base) + L"\\CockpitCast\\screens-webview";
+    g_envCreating = true;
+    HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(nullptr, dir.c_str(), nullptr,
+        Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>([](HRESULT r, ICoreWebView2Environment* env) -> HRESULT {
+            g_envCreating = false;
+            if (FAILED(r) || !env) {
+                g_envFailed = true;
+                LogLine("Microsoft Edge WebView2 is not available: layouts cannot be shown on local screens");
+                return S_OK;
+            }
+            g_env = env;
+            return S_OK;
+        }).Get());
+    if (FAILED(hr)) {
+        g_envCreating = false;
+        g_envFailed = true;
+        LogLine("Microsoft Edge WebView2 is not available: layouts cannot be shown on local screens");
+    }
+}
+
+// Make the screen's browser view exist and show its page (called every tick for screens with a page).
+void SyncPage(Screen& s) {
+    if (!s.wvc) {
+        if (s.wvCreating || s.wvFailed) return;
+        EnsureEnv();
+        if (!g_env) return;
+        s.wvCreating = true;
+        HWND hw = s.hwnd;
+        HRESULT hr = g_env->CreateCoreWebView2Controller(hw, Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+            [hw](HRESULT r, ICoreWebView2Controller* c) -> HRESULT {
+                Screen* sc = ByHwnd(hw);
+                if (!sc || sc->page.empty()) {  // gone, or showing something else meanwhile
+                    if (sc) sc->wvCreating = false;
+                    if (c) c->Close();
+                    return S_OK;
+                }
+                sc->wvCreating = false;
+                if (FAILED(r) || !c) {
+                    sc->wvFailed = true;
+                    LogLine("cannot create a browser view for a local screen");
+                    return S_OK;
+                }
+                sc->wvc = c;
+                sc->wvc->get_CoreWebView2(&sc->wv);
+                ComPtr<ICoreWebView2Controller2> c2;
+                if (SUCCEEDED(sc->wvc.As(&c2))) c2->put_DefaultBackgroundColor(COREWEBVIEW2_COLOR{255, 0, 0, 0});
+                // A cockpit screen, not a browser: no menus, keys, zoom or tools of its own.
+                ComPtr<ICoreWebView2Settings> st;
+                if (sc->wv && SUCCEEDED(sc->wv->get_Settings(&st))) {
+                    st->put_IsStatusBarEnabled(FALSE);
+                    st->put_AreDefaultContextMenusEnabled(FALSE);
+                    st->put_AreDevToolsEnabled(FALSE);
+                    st->put_IsZoomControlEnabled(FALSE);
+                    ComPtr<ICoreWebView2Settings3> s3;
+                    if (SUCCEEDED(st.As(&s3))) s3->put_AreBrowserAcceleratorKeysEnabled(FALSE);
+                }
+                if (sc->wv) {
+                    // The page's right-click: our menu.
+                    sc->wv->add_WebMessageReceived(Callback<ICoreWebView2WebMessageReceivedEventHandler>([hw](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*) -> HRESULT {
+                        POINT pt;
+                        GetCursorPos(&pt);
+                        ShowMenu(hw, pt);
+                        return S_OK;
+                    }).Get(), nullptr);
+                    // The browser's process crashed: start the view again on the next tick.
+                    sc->wv->add_ProcessFailed(Callback<ICoreWebView2ProcessFailedEventHandler>([hw](ICoreWebView2*, ICoreWebView2ProcessFailedEventArgs*) -> HRESULT {
+                        if (Screen* s2 = ByHwnd(hw)) {
+                            LogLine("a local screen's browser view stopped; starting it again");
+                            CloseWebView(*s2);
+                        }
+                        return S_OK;
+                    }).Get(), nullptr);
+                }
+                RECT rc;
+                GetClientRect(hw, &rc);
+                sc->wvc->put_Bounds(rc);
+                sc->wvc->put_IsVisible(TRUE);
+                return S_OK;
+            }).Get());
+        if (FAILED(hr)) {
+            s.wvCreating = false;
+            s.wvFailed = true;
+        }
+        return;
+    }
+    if (s.wv && s.navigated != s.page) {
+        s.wv->Navigate(Wide(s.page).c_str());
+        s.navigated = s.page;
+    }
+    if (s.dirty) {
+        RECT rc;
+        GetClientRect(s.hwnd, &rc);
+        s.wvc->put_Bounds(rc);
+        s.dirty = false;
+    }
+}
+
 LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_MOUSEACTIVATE:
             RaiseScreens();        // a click brings the local screens to the front...
             return MA_NOACTIVATE;  // ...without taking the keyboard focus from the sim
         case WM_RBUTTONUP: {  // the way out: turn local screens off, or open CockpitCast
-            HMENU m = CreatePopupMenu();
-            AppendMenuW(m, MF_STRING, 1, L"Turn local screens off");
-            AppendMenuW(m, MF_STRING, 2, L"Open CockpitCast");
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ClientToScreen(h, &pt);
-            SetForegroundWindow(h);  // so the menu closes when clicking elsewhere
-            UINT cmd = TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.x, pt.y, 0, h, nullptr);
-            DestroyMenu(m);
-            if (cmd == 1) Out("{\"type\":\"action\",\"action\":\"off\"}");
-            else if (cmd == 2) AllowSetForegroundWindow(ASFW_ANY), Out("{\"type\":\"action\",\"action\":\"open\"}");
+            ShowMenu(h, pt);
             return 0;
         }
         case WM_ERASEBKGND:
@@ -555,6 +696,24 @@ bool Tick() {
     for (auto& sp : g_screens) {
         if (!sp) continue;
         Screen& s = *sp;
+        if (!s.page.empty()) {  // a layout: the browser view shows it
+            SyncPage(s);
+            if (!s.wvc) {  // not there (yet): say so in the window
+                std::wstring title = Wide(s.label.empty() ? "Screen " + s.id : s.label);
+                std::wstring line = g_envFailed || s.wvFailed ? L"Layouts need Microsoft Edge WebView2 (part of Windows 11)" : L"Loading the layout\u2026";
+                if (s.dirty || s.drawnText != title + L"\n" + line) {
+                    if (!DrawWaiting(s, title, line)) return false;
+                    s.dirty = false;
+                    s.drawnSeq = -1;
+                    s.drawnText = title + L"\n" + line;
+                }
+            }
+            continue;
+        }
+        if (s.wvc) {  // was a layout: back to drawing it ourselves
+            CloseWebView(s);
+            s.dirty = true;
+        }
         int entry = share && !s.display.empty() ? FindEntry(s.display) : -1;
         if (entry >= 0 && g_share->displays[entry].latest < 0) entry = -1;  // set up, no picture yet
         if (entry < 0) {
@@ -621,6 +780,8 @@ void ApplyWindows(const JValue& list) {
         }
         bool onTop = w["onTop"].asBool(true);
         if (s->hwnd && onTop != s->onTop) {  // another mode: a new window with the other style
+            CloseWebView(*s);
+            s->wvCreating = false;
             ReleaseChain(*s);
             DestroyWindow(s->hwnd);
             s->hwnd = nullptr;
@@ -632,12 +793,16 @@ void ApplyWindows(const JValue& list) {
         s->fit = w["fit"].asString();
         s->label = w["label"].asString();
         s->note = w["note"].asString();
+        std::string page = w["page"].asString();
+        if (page != s->page) s->wvFailed = false;  // another page: try again
+        s->page = page;
         Place(*s);
         SetWindowTextW(s->hwnd, (L"CockpitCast \u00b7 " + Wide(s->label.empty() ? "Screen " + s->id : s->label)).c_str());
         next.push_back(std::move(s));
     }
     for (auto& old : g_screens)
         if (old) {
+            CloseWebView(*old);
             ReleaseChain(*old);
             if (old->hwnd) DestroyWindow(old->hwnd);
         }
@@ -656,9 +821,10 @@ void SendStats() {
     for (size_t i = 0; i < g_screens.size(); ++i) {
         const Screen& s = *g_screens[i];
         bool live = ShareOk() && !s.display.empty() && FindEntry(s.display) >= 0;
+        const char* state = !s.page.empty() ? "page" : s.display.empty() ? "empty" : live ? "live" : "waiting";
         char b[256];
         snprintf(b, sizeof b, "%s{\"id\":\"%s\",\"display\":\"%s\",\"frames\":%llu,\"state\":\"%s\"}", i ? "," : "", Esc(s.id).c_str(), Esc(s.display).c_str(),
-                 (unsigned long long)s.frames, s.display.empty() ? "empty" : live ? "live" : "waiting");
+                 (unsigned long long)s.frames, state);
         j += b;
     }
     Out(j + "]}");
@@ -677,6 +843,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     RegisterClassW(&wc);
     ReadMonitors();
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);  // WebView2 (layouts)
 
     DWORD mainThread = GetCurrentThreadId();
     std::thread([mainThread] {
@@ -706,6 +873,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
                 OnLine(*line);
                 delete line;
             } else if (msg.message == WM_HOSTGONE) {
+                for (auto& s : g_screens)
+                    if (s) CloseWebView(*s);
+                g_env.Reset();
                 ReleaseDevice();
                 return 0;
             } else if (msg.message == WM_DISPLAYCHANGE && !msg.hwnd) {

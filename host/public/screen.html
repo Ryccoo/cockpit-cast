@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CockpitCast screen</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: default; user-select: none; }
+  #stage { position: absolute; }
+  #stage canvas { position: absolute; display: block; }
+  #msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+         color: #8c99a6; font: 600 clamp(14px, 6vmin, 48px) "Segoe UI", system-ui, sans-serif; text-align: center; padding: 6vmin; }
+  #msg small { color: #616b75; font-weight: 400; font-size: 0.55em; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="msg"></div>
+<script src="/gauges.js"></script>
+<script>
+'use strict';
+// One screen's steam-gauge layout, full window: what the local screen viewer (cockpitcast-screens.exe)
+// shows in a screen set to "On this PC" while that screen shows a layout. /screen?screen=<id>
+// Draws with the same gauges as the editor (gauges.js), with live sim data at up to 60 Hz. Glass parts of
+// a layout come as pictures from the host, like in the editor. Whole glass screens never come here: the
+// viewer draws those straight from the GPU.
+// Right-click asks the viewer for its menu (Turn local screens off / Open CockpitCast).
+
+const screenId = new URLSearchParams(location.search).get('screen') || '1';
+const $ = (id) => document.getElementById(id);
+let ws = null, connected = false;
+let screens = [], layouts = [];
+let varIndex = {}, latest = null, latestAt = 0, refs = {};
+let shown = '';            // JSON of what is drawn now
+let items = [];            // [{ canvas, g }]
+const frames = {};         // display id -> { bmp, at }
+const decoding = new Set();
+const subs = new Set();
+
+const V = {
+  get(k, fb = 0) {
+    const i = varIndex[k];
+    if (latest && i !== undefined) return latest[i];
+    return k in refs ? refs[k] : fb;
+  },
+  knows(k) { return k in varIndex; },
+  get live() { return latest !== null && performance.now() - latestAt < 2000; },
+};
+
+function message(title, line) {
+  $('msg').innerHTML = title ? `<div></div><small></small>` : '';
+  if (title) { $('msg').firstChild.textContent = title; $('msg').lastChild.textContent = line || ''; }
+}
+
+// What this screen shows: a layout (drawn here), or something else (the viewer switches away from this page).
+function render() {
+  const s = screens.find((x) => x.id === screenId);
+  const layout = s?.show?.kind === 'layout' ? layouts.find((l) => l.id === s.show.id) : null;
+  const key = JSON.stringify([connected, s?.name, s?.show, layout, innerWidth, innerHeight]);
+  if (key === shown) return;
+  shown = key;
+  const stage = $('stage');
+  stage.innerHTML = '';
+  items = [];
+  if (!connected) return message(s?.name || `Screen ${screenId}`, 'Waiting for CockpitCast');
+  if (!layout) return message(s?.name || `Screen ${screenId}`, s?.show?.kind === 'layout' ? `Layout ${s.show.id} not found` : 'Waiting for a flight');
+  message('');
+  // Fit the layout into the window, keeping its shape (black bars), centred.
+  const k = Math.min(innerWidth / layout.width, innerHeight / layout.height);
+  Object.assign(stage.style, { width: layout.width * k + 'px', height: layout.height * k + 'px', left: (innerWidth - layout.width * k) / 2 + 'px', top: (innerHeight - layout.height * k) / 2 + 'px' });
+  for (const g of layout.gauges) {
+    const cv = document.createElement('canvas');
+    Object.assign(cv.style, { left: g.x * k + 'px', top: g.y * k + 'px', width: g.w * k + 'px', height: g.h * k + 'px' });
+    stage.appendChild(cv);
+    items.push({ canvas: cv, g });
+  }
+  // Glass parts: frames for their displays, nothing else.
+  const want = new Set(layout.gauges.filter((g) => g.type === 'glass' && g.options?.display).map((g) => g.options.display));
+  for (const id of subs) if (!want.has(id)) { send({ type: 'unsubscribe', display: id }); subs.delete(id); }
+  for (const id of want) if (!subs.has(id)) { send({ type: 'subscribe', display: id, maxFps: 30 }); subs.add(id); }
+}
+
+function drawGlass(ctx, w, h, o) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+  const f = frames[o.display];
+  if (!f) return;
+  const c = o.crop || { x: 0, y: 0, w: 1, h: 1 }, bw = f.bmp.width, bh = f.bmp.height;
+  const sx = c.x * bw, sy = c.y * bh, sw = Math.max(1, c.w * bw), sh = Math.max(1, c.h * bh);
+  let dx = 0, dy = 0, dw = w, dh = h;
+  if (o.fit !== 'fill') {
+    const s = o.fit === 'cover' ? Math.max(w / sw, h / sh) : Math.min(w / sw, h / sh);
+    dw = sw * s; dh = sh * s; dx = (w - dw) / 2; dy = (h - dh) / 2;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.clip();
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(f.bmp, sx, sy, sw, sh, dx, dy, dw, dh);
+  ctx.restore();
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  const dpr = devicePixelRatio || 1;
+  for (const { canvas, g } of items) {
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (g.type === 'glass') drawGlass(ctx, canvas.clientWidth, canvas.clientHeight, g.options || {});
+    else CockpitGauges.drawGauge(ctx, canvas.clientWidth, canvas.clientHeight, g.type, g.options, V);
+  }
+}
+
+async function onFrame(buf) {
+  const dv = new DataView(buf);
+  if (buf.byteLength < 22 || dv.getUint32(0, true) !== 0x31464c43) return; // "CLF1"
+  const idLen = dv.getUint8(20);
+  const id = new TextDecoder().decode(new Uint8Array(buf, 21, idLen));
+  if (decoding.has(id)) return; // still decoding the previous one: a newer frame follows
+  decoding.add(id);
+  try {
+    const bmp = await createImageBitmap(new Blob([new Uint8Array(buf, 21 + idLen)], { type: 'image/jpeg' }));
+    frames[id]?.bmp.close?.();
+    frames[id] = { bmp, at: performance.now() };
+  } catch {} finally {
+    decoding.delete(id);
+  }
+}
+
+function send(o) { if (ws?.readyState === 1) ws.send(JSON.stringify(o)); }
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => {
+    connected = true;
+    subs.clear();
+    shown = '';
+    send({ type: 'hello', client: `Local screen ${screenId}`, role: 'local', protocol: 1 });
+    send({ type: 'subscribeData', maxHz: 60 });
+    render();
+  };
+  ws.onclose = () => { connected = false; latest = null; shown = ''; render(); setTimeout(connect, 1000); };
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') return void onFrame(ev.data);
+    const m = JSON.parse(ev.data);
+    if (m.type === 'screens') { screens = m.screens || []; render(); }
+    else if (m.type === 'layouts') { layouts = m.layouts || []; render(); }
+    else if (m.type === 'dataVars') varIndex = Object.fromEntries(m.vars.map((k, i) => [k, i]));
+    else if (m.type === 'data') { latest = m.v; latestAt = performance.now(); }
+    else if (m.type === 'status') { const sp = m.sim?.speeds; refs = sp ? Object.fromEntries(Object.entries({ vfe: sp.vfe, vno: sp.vno }).filter(([, v]) => v)) : {}; }
+  };
+}
+
+// The viewer's menu instead of the browser's.
+addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  window.chrome?.webview?.postMessage('menu');
+});
+addEventListener('resize', render);
+render();
+connect();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

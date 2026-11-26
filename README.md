@@ -336,7 +336,12 @@ textures, with no JPEG, no network and no second app on the graphics card's busy
 - **Show local screens** in the tray menu, or **Local screens: on/off** in the Screens tab, turns them
   all on or off at once, keeping their monitors and areas.
 - An empty screen shows its name and why (waiting for MSFS, waiting for the display).
-- Steam-gauge layouts are not drawn by the local viewer yet: use the display app for those.
+- Screens showing a **steam-gauge layout** show it too, with live sim data: the viewer shows the host's
+  `/screen` page in a built-in browser view (Microsoft Edge WebView2, part of Windows 11). Glass parts of
+  a layout come as pictures, as in the editor; whole glass screens keep the direct GPU path. A screen
+  switches between the two by itself (glass aircraft, steam aircraft).
+- **Right-click** a local screen: *Turn local screens off* or *Open CockpitCast*. In the Screens tab,
+  *Local screens: always on top* (covers the taskbar, not in Alt+Tab) or *normal windows*.
 - The monitors must be on the same graphics card as the sim. Tip: turn off "Show my taskbar on all
   displays" (Windows Settings > Personalization > Taskbar) so the taskbar does not cover a cockpit
   monitor.

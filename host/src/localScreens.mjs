@@ -125,11 +125,13 @@ export class LocalScreens extends EventEmitter {
         monitor: l.monitor,
         area: l.area ?? 'full',
         fit: l.fit ?? 'contain',
-        // Glass displays only for now; a steam layout leaves the window black, with a note.
+        // A glass display: drawn by the viewer straight from the GPU. A layout: the viewer shows the host's
+        // /screen page for this screen (steam gauges with live data; public/screen.html) in a browser view.
         display: s.show?.kind === 'display' ? s.show.id : null,
+        page: s.show?.kind === 'layout' ? `http://127.0.0.1:${this.cfg.port}/screen?screen=${encodeURIComponent(s.id)}` : null,
         label: s.name,
         onTop: this.onTop,
-        note: s.show?.kind === 'layout' ? `Steam gauges (${this.layoutName?.(s.show.id) ?? s.show.id}) are not shown on this PC yet` : null,
+        note: null,
       });
     }
     return out;
@@ -149,7 +151,7 @@ export class LocalScreens extends EventEmitter {
     const json = JSON.stringify({ type: 'windows', windows });
     if (json === this.last) return;
     this.last = json;
-    log.info(windows.length ? `showing ${windows.map((w) => `screen ${w.id} on monitor ${w.monitor + 1} (${w.area}): ${w.display ?? '-'}`).join('; ')}` : 'no local screens');
+    log.info(windows.length ? `showing ${windows.map((w) => `screen ${w.id} on monitor ${w.monitor + 1} (${w.area}): ${w.display ?? (w.page ? 'layout' : '-')}`).join('; ')}` : 'no local screens');
     this.proc.stdin.write(json + '\n');
   }
 

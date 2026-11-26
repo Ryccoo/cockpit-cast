@@ -242,6 +242,9 @@ stdout, one UTF-8 line per message. When the host exits, stdin closes and the tr
 - `POST /api/displays` (sim PC only): `{ "key": "<instrument key>" }` adds an instrument as a display; `{ "id", "name"?, "primary"? }` changes a learned one; `{ "id", "forget": true }` removes it.
 - `GET /thumb/<id>.jpg`: the last picture saved of a display (any client; 404 if none). The host saves one at most once a minute while a display is captured, and, only while an editor is open, grabs one by itself (1 fps for a few seconds) for displays in the loaded cockpit that nobody watches, when theirs is missing or older than 10 minutes. With no editor open, nothing is captured beyond what clients watch.
 - `GET /api/status`: JSON with host info, sim, capture, hook and injector state, capture sources with their STATS, layouts, the current CONFIG, displays and connected clients.
+- `GET /screen?screen=<id>`: one screen's layout, full window (steam gauges with live data; glass parts as
+  pictures). The local screen viewer shows it for screens set to "On this PC" while they show a layout. It
+  connects like a client with `hello` `role: "local"`: such connections are not listed as display apps.
 - `POST /api/inject` (localhost only): inject capture.dll now, skipping the wait for a live flight.
 - `POST /api/capture/shutdown` (localhost only): send SHUTDOWN to every capture source.
 - `GET /`: debug monitor page (for testing only; real clients are apps).

@@ -77,6 +77,9 @@ test('isolated: the log says so, and nothing touched the sim', () => {
 });
 
 test('the CockpitCast window and its old addresses', async () => {
+  const screen = await fetch(`${base}/screen?screen=1`);
+  assert.equal(screen.status, 200);
+  assert.match(await screen.text(), /src="\/gauges.js"/);
   for (const p of ['/', '/editor', '/monitor.html']) {
     const r = await fetch(base + p);
     assert.equal(r.status, 200, p);
@@ -119,6 +122,10 @@ test('display apps: one row per app window, the settings page as a mark', async 
   const app = client(), settings = client(), page = client();
   t.after(() => [app, settings, page].forEach((c) => c.ws.close()));
   await Promise.all([app.open, settings.open, page.open]);
+  const local = client();
+  t.after(() => local.ws.close());
+  await local.open;
+  local.send({ type: 'hello', client: 'Local screen 1', role: 'local', protocol: 1 }); // a local screen's page: not an app
   app.send({ type: 'hello', client: 'phone', device: 'phone-1', window: 'Window 1', shows: 'screen 2: MFD', protocol: 1, version: '9.9.9' });
   settings.send({ type: 'hello', client: 'phone', device: 'phone-1', window: 'Settings', role: 'settings', protocol: 1 });
   page.send({ type: 'hello', client: 'Layout editor', protocol: 1 });
