@@ -7,6 +7,7 @@
 //   Tray icon (Windows): shows the host is running; click opens the layout editor
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { loadConfig } from './config.mjs';
 import { FrameHub } from './frameHub.mjs';
 import { CaptureConfig } from './captureConfig.mjs';
@@ -131,6 +132,18 @@ clients.addApi('POST', '/api/inject', () => injector.injectNow());
 const hookSetup = new HookSetup({ cfg, hook, version });
 clients.addApi('GET', '/api/hook-setup', () => hookSetup.status());
 clients.addApi('POST', '/api/hook-setup/reinstall', async (req) => hookSetup.reinstall((await readJson(req)).community));
+// The monitor's Troubleshooting section: this PC's paths, for commands people can paste into PowerShell.
+clients.addApi('GET', '/api/troubleshoot', async () => {
+  const h = await hookSetup.status();
+  return {
+    node: process.execPath,
+    setupHook: path.join(cfg.root, 'hook', 'setup-hook.mjs'),
+    logs: path.dirname(cfg.logFile),
+    community: h.community,
+    from: h.from,
+    elevated: h.elevated,
+  };
+});
 clients.addApi('POST', '/api/capture/shutdown', () => {
   capture.shutdownSources();
   return { ok: true };

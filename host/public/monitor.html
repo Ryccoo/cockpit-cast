@@ -33,6 +33,20 @@
   .inst td button { background: #24313a; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 1px 8px; cursor: pointer; font-size: 11px; }
   .note { color: var(--muted); font-size: 12px; margin: 8px 0; }
   .note a { color: var(--muted); }
+  /* troubleshooting */
+  #trouble > summary { cursor: pointer; list-style: none; }
+  #trouble > summary::-webkit-details-marker { display: none; }
+  #trouble > summary h2::before { content: '\25B8  '; color: var(--muted); }
+  #trouble[open] > summary h2::before { content: '\25BE  '; }
+  #trouble details { border-top: 1px solid var(--line); padding: 6px 0; }
+  #trouble details > summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 4px 0; }
+  #trouble p, #trouble li { font-size: 13px; margin: 6px 0; max-width: 900px; }
+  #trouble .cmd { position: relative; margin: 6px 0 10px; }
+  #trouble pre { background: #0b1013; border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; margin: 0; white-space: pre-wrap; word-break: break-all; font-size: 12px; user-select: all; }
+  #trouble .cmd button { position: absolute; top: 4px; right: 4px; background: #24313a; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 2px 10px; cursor: pointer; font-size: 11px; }
+  #trouble input { width: 100%; max-width: 900px; background: #0b1013; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; font: inherit; font-size: 12px; }
+  #trouble code { font-size: 12px; }
+  #trouble a { color: var(--ok); }
 </style>
 </head>
 <body>
@@ -56,6 +70,50 @@
 <section class="inst">
   <h2>Instruments in this cockpit <span id="instAircraft"></span> <button id="instRefresh">Refresh</button></h2>
   <div id="inst"><p class="note">Loading…</p></div>
+</section>
+<section class="inst">
+<details id="trouble">
+  <summary><h2>Troubleshooting <span>fixes for common problems; commands to paste into PowerShell on the sim PC</span></h2></summary>
+
+  <details id="tAdmin" style="display:none" open>
+    <summary class="bad">CockpitCast is running as administrator</summary>
+    <p>An elevated CockpitCast can be refused folders you can open yourself, such as the MS Store sim's Community folder. Right-click the CockpitCast tray icon, choose <b>Quit CockpitCast host</b>, then start <b>CockpitCast</b> from the Start menu normally (not "Run as administrator").</p>
+  </details>
+
+  <details id="tHook">
+    <summary>The glass displays don't appear (the hook isn't detected)</summary>
+    <p>CockpitCast needs its <b>hook</b>, a small add-on, in the Community folder MSFS actually loads add-ons from. First try the editor's <a href="/editor#addon">Sim add-on</a> tab: it shows where the hook is and can reinstall it. If that doesn't work, install it by hand:</p>
+    <ol>
+      <li>Close MSFS (check Task Manager: no <code>FlightSimulator2024.exe</code>).</li>
+      <li>Paste your Community folder below (open it in Explorer and copy the path from the address bar). With MSFS Addons Linker: the Community folder set in its Options, where it puts the links, not your add-ons library.</li>
+      <li>Open Windows PowerShell (Start, type <i>PowerShell</i>; a normal window, not "Run as administrator"), paste the command, press Enter. It ends with <code>Installed &hellip;</code> and CockpitCast remembers the folder.</li>
+      <li>Start MSFS and load a flight.</li>
+    </ol>
+    <input id="tFolder" spellcheck="false" placeholder="e.g. C:\Users\you\AppData\Local\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community">
+    <div class="cmd"><pre id="cmdInstall"></pre><button data-copy="cmdInstall">Copy</button></div>
+    <p>If it says the folder doesn't exist although Explorer opens it, this checks what CockpitCast sees (<code>found, folder: true</code> is fine; <code>EPERM</code> or <code>EACCES</code> means access denied, by an elevated CockpitCast or security software):</p>
+    <div class="cmd"><pre id="cmdCheck"></pre><button data-copy="cmdCheck">Copy</button></div>
+    <p>Only one add-on can replace the sim file the hook uses. If the output names another package that "also replaces BaseInstrument.js", move that package out of the Community folder (or untick it in Addons Linker) and run the command again.</p>
+  </details>
+
+  <details>
+    <summary>Which Community folder does MSFS use?</summary>
+    <p>The Steam version keeps add-ons in <code>%APPDATA%\Microsoft Flight Simulator 2024\Packages\Community</code>, the MS Store / Xbox app version in <code>%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community</code>, unless the packages folder was moved when the sim was installed. The sim's settings file names the real one: its <code>InstalledPackagesPath</code> line, plus <code>\Community</code>. This shows it for both versions:</p>
+    <div class="cmd"><pre id="cmdWhere"></pre><button data-copy="cmdWhere">Copy</button></div>
+    <p>MSFS Addons Linker shows the folder in its Options as "MSFS 2024 Community folder".</p>
+  </details>
+
+  <details>
+    <summary>Antivirus warnings (AVG, Avast, ...)</summary>
+    <p>CockpitCast is not code-signed yet, and its injector loads the capture module into the sim, which antivirus software watches closely. A warning like AVG's "Suspicious file detected" (CyberCapture) is a check, not a finding: let the scan finish. If the antivirus blocks <code>cockpitcast-injector.exe</code>, the glass displays can't be captured (steam gauges still work); allowing CockpitCast's folder (<code>%LOCALAPPDATA%\Programs\CockpitCast</code>) fixes it. CockpitCast is open source: the code is on <a href="https://github.com/Ryccoo/cockpit-cast" target="_blank" rel="noopener">GitHub</a>.</p>
+  </details>
+
+  <details>
+    <summary>Send logs with a bug report</summary>
+    <p>This puts CockpitCast's logs into <code>CockpitCast-logs.zip</code> on your desktop, to attach to a message or a GitHub issue. The logs contain this PC's name, folder paths and aircraft names, nothing else personal.</p>
+    <div class="cmd"><pre id="cmdLogs"></pre><button data-copy="cmdLogs">Copy</button></div>
+  </details>
+</details>
 </section>
 <script src="/update-banner.js"></script>
 <script>
@@ -97,6 +155,7 @@ function onText(m) {
       document.getElementById('beta').checked = !!u.beta;
     }
     document.getElementById('adminWarn').style.display = m.elevated ? '' : 'none';
+    document.getElementById('tAdmin').style.display = m.elevated ? '' : 'none';
     const s = m.sim;
     setText('sim', !s.connected ? 'not running' : s.inFlight ? (s.paused ? 'paused' : 'in flight') + (s.aircraft ? ` · ${s.aircraft}` : '') : 'menu', s.connected && s.inFlight);
     setText('cap', m.capture.connected ? m.capture.source : 'none', m.capture.connected);
@@ -165,6 +224,58 @@ async function onFrame(buf) {
   const age = Date.now() - hostTime; // meaningful only when this browser runs on the host PC
   v.info.textContent = `${w}×${h} · ${fps.toFixed(1)} fps · #${seq}` + (location.hostname === 'localhost' ? ` · ${age.toFixed(0)} ms` : '');
 }
+
+// ---- troubleshooting: commands with this PC's paths (local-only API; defaults from elsewhere) ----
+const trouble = { node: null, setupHook: null, logs: null };
+const psq = (s) => `'${String(s).replace(/'/g, "''")}'`; // a PowerShell string that takes the text as it is
+const tNode = () => (trouble.node ? psq(trouble.node) : '"$env:LOCALAPPDATA\\Programs\\CockpitCast\\node\\node.exe"');
+function renderTrouble() {
+  const folder = document.getElementById('tFolder').value.trim().replace(/^"(.*)"$/, '$1').trim() || 'C:\\path\\to\\your\\Community';
+  const setupHook = trouble.setupHook ? psq(trouble.setupHook) : '"$env:LOCALAPPDATA\\Programs\\CockpitCast\\hook\\setup-hook.mjs"';
+  document.getElementById('cmdInstall').textContent = `& ${tNode()} ${setupHook} --community ${psq(folder)}`;
+  document.getElementById('cmdCheck').textContent =
+    `& ${tNode()} -e "try{console.log('found, folder:', require('fs').statSync(process.argv[1]).isDirectory())}catch(e){console.log(e.code, e.message)}" ${psq(folder)}`;
+  document.getElementById('cmdWhere').textContent =
+    'Select-String -Path "$env:APPDATA\\Microsoft Flight Simulator 2024\\UserCfg.opt", "$env:LOCALAPPDATA\\Packages\\Microsoft.Limitless_8wekyb3d8bbwe\\LocalCache\\UserCfg.opt" -Pattern InstalledPackagesPath -ErrorAction SilentlyContinue';
+  const logs = trouble.logs ? psq(trouble.logs + '\\*') : '"$env:LOCALAPPDATA\\CockpitCast\\logs\\*"';
+  document.getElementById('cmdLogs').textContent =
+    `Compress-Archive -Path ${logs} -DestinationPath "$([Environment]::GetFolderPath('Desktop'))\\CockpitCast-logs.zip" -Force`;
+}
+document.getElementById('tFolder').oninput = renderTrouble;
+document.getElementById('trouble').ontoggle = async (e) => {
+  if (!e.target.open || trouble.node) return;
+  try {
+    const r = await fetch('/api/troubleshoot', { cache: 'no-store' });
+    if (r.ok) {
+      Object.assign(trouble, await r.json());
+      if (trouble.community && !document.getElementById('tFolder').value) document.getElementById('tFolder').value = trouble.community;
+    }
+  } catch {}
+  renderTrouble();
+};
+for (const b of document.querySelectorAll('#trouble [data-copy]')) {
+  b.onclick = async () => {
+    const pre = document.getElementById(b.dataset.copy);
+    try {
+      await navigator.clipboard.writeText(pre.textContent); // pages on this PC (localhost)
+    } catch {
+      const sel = getSelection(); // elsewhere: select it for Ctrl+C
+      sel.removeAllRanges();
+      const range = document.createRange();
+      range.selectNodeContents(pre);
+      sel.addRange(range);
+      b.textContent = 'Ctrl+C';
+      setTimeout(() => (b.textContent = 'Copy'), 2000);
+      return;
+    }
+    b.textContent = 'Copied';
+    setTimeout(() => (b.textContent = 'Copy'), 1500);
+  };
+}
+renderTrouble();
+// Links people can be sent: /#trouble opens this section, /#trouble-hook also the hook item.
+if (location.hash.startsWith('#trouble')) document.getElementById('trouble').open = true;
+if (location.hash === '#trouble-hook') document.getElementById('tHook').open = true;
 
 document.getElementById('beta').onchange = (e) => {
   if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'setUpdateBeta', on: e.target.checked }));
