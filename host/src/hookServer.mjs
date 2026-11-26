@@ -27,7 +27,7 @@ export class HookServer extends EventEmitter {
   onPage(ws, req) {
     const addr = req.socket.remoteAddress;
     if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(addr)) return ws.close(1008, 'local only');
-    const page = { ws, displays: new Map(), name: null };
+    const page = { ws, displays: new Map(), name: null, version: null };
     this.pages.add(page);
     this.sendTable(page);
     ws.on('message', (data, isBinary) => {
@@ -40,6 +40,7 @@ export class HookServer extends EventEmitter {
       }
       if (msg.type === 'hello') {
         page.name = String(msg.page ?? '').slice(0, 200);
+        page.version = msg.version ? String(msg.version).slice(0, 40) : null;
         this.emit('status');
       } else if (msg.type === 'layout') this.onLayout(page, msg);
       else if (msg.type === 'instruments') this.onInstruments(msg);
@@ -111,7 +112,8 @@ export class HookServer extends EventEmitter {
   }
 
   status() {
-    return { connected: this.pages.size > 0, pages: this.pages.size, displays: [...this.present()].sort() };
+    const versions = [...new Set([...this.pages].map((p) => p.version).filter(Boolean))];
+    return { connected: this.pages.size > 0, pages: this.pages.size, displays: [...this.present()].sort(), versions };
   }
 
   detail() {

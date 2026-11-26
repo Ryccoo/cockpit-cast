@@ -2,12 +2,19 @@
 //
 //   node hook/install-hook.mjs [--community <folder>] [--force]   install (sim must be closed)
 //   node hook/install-hook.mjs --remove                            uninstall
+//   node hook/install-hook.mjs --detect                            print (JSON) which folder it would use
 //
 // The Community folder, first match wins: --community, the MSFS_COMMUNITY environment variable, the
 // folder chosen last time (saved in %LOCALAPPDATA%\CockpitCast\hook.json, so repairs after sim updates
-// find it again), the sim's packages folder from UserCfg.opt, the default location. A folder found
-// through --community or MSFS_COMMUNITY is saved. Exit code 3: no Community folder found (the installer
-// then asks for it). Nothing is changed when it exits with an error: an installed hook stays.
+// find it again), the Community folder set in MSFS Addons Linker, the sim's packages folder from
+// UserCfg.opt, the default locations. A folder found through --community or MSFS_COMMUNITY is saved.
+// Exit code 3: no Community folder found (the installer then asks for it). Nothing is changed when it
+// exits with an error: an installed hook stays.
+//
+// Addons Linker (popular with people who keep add-ons on another drive) keeps the add-ons in its own
+// library and puts links to the enabled ones into the sim's real Community folder. The hook goes into
+// that Community folder as a normal folder, never into the library (the sim does not read the library).
+// installer/host.iss looks for the folder in the same order (DetectCommunity) to fill in its page.
 //
 // Only one package can override BaseInstrument.js at a time. If another Community package
 // overrides it too, this refuses unless --force is given.
@@ -44,6 +51,35 @@ function savedCommunity() {
   }
 }
 
+// MSFS Addons Linker: its settings (an .ini under C:\ProgramData\MSFS Addons Linker*) hold the Community
+// folder it links add-ons into. The key names are not documented, so any setting whose value is an
+// existing folder named Community (or Community2024) counts.
+function fromAddonsLinker() {
+  const out = [];
+  const base = process.env.ProgramData || 'C:\\ProgramData';
+  let dirs = [];
+  try {
+    dirs = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory() && /^msfs addons? linker/i.test(d.name));
+  } catch {}
+  for (const d of dirs) {
+    let files = [];
+    try {
+      files = fs.readdirSync(path.join(base, d.name)).filter((f) => /\.ini$/i.test(f));
+    } catch {}
+    for (const f of files) {
+      let text = '';
+      try {
+        text = fs.readFileSync(path.join(base, d.name, f), 'utf8');
+      } catch {}
+      for (const line of text.split(/\r?\n/)) {
+        const v = /^[^=;#\[]+=\s*"?([^"]+?)"?\s*$/.exec(line)?.[1];
+        if (v && /[\\/]community(2024)?[\\/]?$/i.test(v) && fs.existsSync(v) && !out.includes(path.resolve(v))) out.push(path.resolve(v));
+      }
+    }
+  }
+  return out;
+}
+
 // The Community folder sits in the sim's packages folder (InstalledPackagesPath in UserCfg.opt), which
 // the user picks at install time. UserCfg.opt is in a different place for the Steam and MS Store versions.
 function fromUserCfg() {
@@ -66,10 +102,23 @@ const candidates = [
   [asCommunity(given), '--community'],
   [asCommunity(process.env.MSFS_COMMUNITY), 'MSFS_COMMUNITY'],
   [savedCommunity(), `saved in ${SAVED}`],
+  ...fromAddonsLinker().map((p) => [p, 'MSFS Addons Linker setting']),
   ...fromUserCfg().map((p) => [p, 'InstalledPackagesPath in UserCfg.opt']),
   [path.join(process.env.APPDATA ?? '', 'Microsoft Flight Simulator 2024', 'Packages', 'Community'), 'default location, Steam'],
   [path.join(process.env.LOCALAPPDATA ?? '', 'Packages', 'Microsoft.Limitless_8wekyb3d8bbwe', 'LocalCache', 'Packages', 'Community'), 'default location, MS Store'],
 ].filter(([p]) => p);
+
+// --detect: report and change nothing (the editor's Sim add-on tab, setup's folder page).
+if (args.has('--detect')) {
+  const found = candidates.find(([p]) => fs.existsSync(p));
+  console.log(JSON.stringify({
+    community: found?.[0] ?? null,
+    from: found?.[1] ?? null,
+    installed: !!found && fs.existsSync(path.join(found[0], PKG)),
+    tried: candidates.map(([p, from]) => ({ path: p, from, exists: fs.existsSync(p) })),
+  }));
+  process.exit(0);
+}
 
 // An explicitly named folder must exist: falling back to another one would install where the user did not ask.
 if (given && !fs.existsSync(candidates[0][0])) {

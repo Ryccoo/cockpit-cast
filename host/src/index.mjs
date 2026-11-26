@@ -25,6 +25,7 @@ import { SIMVARS } from './simvars.mjs';
 import { advertise } from './discovery.mjs';
 import { Tray } from './tray.mjs';
 import { Updater } from './updater.mjs';
+import { HookSetup } from './hookSetup.mjs';
 import { logToConsole, logToFile, makeLog } from './log.mjs';
 
 const cfg = loadConfig();
@@ -119,6 +120,10 @@ clients.addApi('POST', '/api/displays', async (req) => {
   return registry.update(body.id, { name: body.name, primary: body.primary });
 });
 clients.addApi('POST', '/api/inject', () => injector.injectNow());
+// The editor's Sim add-on tab: where the Community hook is, and reinstalling it (see hookSetup.mjs).
+const hookSetup = new HookSetup({ cfg, hook, version });
+clients.addApi('GET', '/api/hook-setup', () => hookSetup.status());
+clients.addApi('POST', '/api/hook-setup/reinstall', async (req) => hookSetup.reinstall((await readJson(req)).community));
 clients.addApi('POST', '/api/capture/shutdown', () => {
   capture.shutdownSources();
   return { ok: true };

@@ -23,7 +23,7 @@
   header .tabs button { background: transparent; border-color: transparent; color: var(--muted); padding: 4px 12px; }
   header .tabs button.on { background: var(--panel2); border-color: var(--line); color: var(--text); }
   main { display: grid; grid-template-columns: 260px 1fr 320px; flex: 1; min-height: 0; }
-  body[data-tab=screens] main { display: none; }
+  body[data-tab=screens] main, body[data-tab=addon] main { display: none; }
   /* screens tab: rows are screens, columns all aircraft + one per aircraft with its own choices */
   #screensPage { display: none; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
   #screensPage .body, #screensPage .toolbar { min-width: 0; }
@@ -43,6 +43,21 @@
   .sctable .row { margin-top: 6px; }
   .sctable .nowrap { flex-wrap: nowrap; margin-top: 0; }
   .sub { color: var(--muted); font-size: 12px; margin-top: 4px; font-weight: 400; overflow-wrap: anywhere; }
+  /* sim add-on tab */
+  #addonPage { display: none; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
+  body[data-tab=addon] #addonPage { display: flex; }
+  #addonPage .body { overflow: auto; padding: 12px 16px 24px; min-width: 0; }
+  #addonPage .addon { max-width: 780px; }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 8px 14px; margin: 8px 0 4px; }
+  .kv > .k { color: var(--muted); }
+  .kv > div { overflow-wrap: anywhere; min-width: 0; }
+  .warn { color: var(--warn); }
+  .bad { color: #ffb4ae; }
+  #hookOut { background: #0c0d0f; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }
+  #hookOut:empty { display: none; }
+  #hookTried summary { cursor: pointer; color: var(--muted); font-size: 12px; margin: 6px 0; }
+  #hookTriedList div { font-size: 12px; margin: 2px 0; overflow-wrap: anywhere; }
+  @media (max-width: 600px) { .kv { grid-template-columns: 1fr; gap: 2px; } .kv > div:not(.k) { margin-bottom: 8px; } }
   .sub .on { color: var(--accent); }
   aside { background: var(--panel); border-right: 1px solid var(--line); overflow: auto; padding: 12px; }
   aside.right { border-right: 0; border-left: 1px solid var(--line); }
@@ -138,7 +153,7 @@
 <body>
 <header>
   <h1>CockpitCast</h1>
-  <nav class="tabs"><button data-tab="layouts">Layouts</button><button data-tab="screens">Screens</button></nav>
+  <nav class="tabs"><button data-tab="layouts">Layouts</button><button data-tab="screens">Screens</button><button data-tab="addon">Sim add-on</button></nav>
   <span id="conn" class="status bad">connecting</span>
   <a href="/">Monitor</a>
   <a href="https://ko-fi.com/richardludvigh" target="_blank" rel="noopener" title="CockpitCast is free and open source. Support it on Ko-fi." style="margin-left:0;color:#e06c75">&#9829; Support</a>
@@ -196,6 +211,23 @@
       <b>An aircraft column</b> overrides that while the aircraft is loaded. The loaded aircraft always has a column.</div>
     <div class="scwrap"><table class="sctable" id="scTable"></table></div>
   </div>
+</section>
+
+<section id="addonPage">
+  <div class="toolbar">
+    <button id="btnHookReinstall" class="primary">Reinstall hook</button>
+    <button id="btnHookRefresh">Refresh</button>
+    <span id="hookMsg" class="hint"></span>
+  </div>
+  <div class="body"><div class="addon">
+    <div class="hint" style="margin-top:0">CockpitCast puts a small add-on, the <b>hook</b>, into MSFS's Community folder. It tells CockpitCast where each glass display is. It holds a copy of one sim file, so reinstall it after every MSFS update. Reinstalling rebuilds it from your sim's current files.</div>
+    <div id="hookStatus"></div>
+    <h2>Community folder</h2>
+    <input id="hookDir" placeholder="e.g. D:\MSFS 2024\Community" spellcheck="false">
+    <div class="hint">The folder MSFS loads add-ons from. With <b>MSFS Addons Linker</b>: the Community folder set in its Options (where it puts the links), <b>not</b> your add-ons library: MSFS does not read the library. CockpitCast remembers the folder you install into.</div>
+    <details id="hookTried"><summary>Where CockpitCast looked</summary><div id="hookTriedList"></div></details>
+    <pre id="hookOut"></pre>
+  </div></div>
 </section>
 
 <div id="preview">
@@ -787,13 +819,76 @@ $('btnScreens').onclick = () => {
   setTimeout(() => ($('screensMsg').textContent = ''), 3000);
 };
 
+// ---- sim add-on tab: the Community hook (host/src/hookSetup.mjs; local-only API) ----
+let hookInfo = null, hookDirTouched = false, hookTimer = null, hookReinstalling = false;
+async function loadHookStatus() {
+  try {
+    const r = await fetch('/api/hook-setup', { cache: 'no-store' });
+    if (r.status === 403) return renderHookRemote();
+    hookInfo = await r.json();
+  } catch (e) {
+    hookInfo = { error: `Cannot reach the host: ${e.message}` };
+  }
+  renderHook();
+}
+// The API answers only on the sim PC itself.
+function renderHookRemote() {
+  $('hookStatus').innerHTML = `<div class="hint warn">Open the editor on the sim PC (<code>http://localhost:${esc(location.port || '8800')}/editor#addon</code>) to check or reinstall the hook.</div>`;
+  $('hookDir').disabled = true;
+  $('btnHookReinstall').disabled = true;
+}
+function renderHook() {
+  const h = hookInfo || {};
+  const row = (k, v) => `<div class="k">${k}</div><div>${v}</div>`;
+  const installed = !h.community ? 'â€”' : !h.installed ? '<span class="bad">no</span>'
+    : `yes${h.installedVersion ? `, version ${esc(h.installedVersion)}` : ''}${h.builtAt ? `<div class="sub">built ${esc(new Date(h.builtAt).toLocaleString())}</div>` : ''}`;
+  const stale = h.installed && h.installedVersion && h.hostVersion && h.installedVersion !== h.hostVersion;
+  const sim = !h.simRunning ? 'not running'
+    : h.inSim?.connected ? `running, the hook is active${h.inSim.versions?.length ? ` (version ${esc(h.inSim.versions.join(', '))})` : ''}`
+    : 'running; the hook has not reported yet (not installed, or no flight loaded)';
+  $('hookStatus').innerHTML = (h.error ? `<div class="err">${esc(h.error)}</div>` : '') + '<div class="kv">'
+    + row('Community folder', h.community ? `${esc(h.community)}<div class="sub">found via: ${esc(h.from)}</div>` : '<span class="bad">not found: enter it below</span>')
+    + row('Hook installed', installed + (stale ? `<div class="sub warn">Not the same version as CockpitCast ${esc(h.hostVersion)}: reinstall it.</div>` : ''))
+    + row('MSFS', sim)
+    + '</div>';
+  $('hookDir').disabled = false;
+  if (!hookDirTouched) $('hookDir').value = h.community || '';
+  $('hookTriedList').innerHTML = (h.tried || []).map((t) => `<div>${t.exists ? 'âœ“' : 'âœ—'} ${esc(t.path)} <span class="sub">(${esc(t.from)})</span></div>`).join('') || '<div class="sub">â€”</div>';
+  $('btnHookReinstall').disabled = !!h.simRunning || !!h.busy;
+  if (!hookReinstalling) $('hookMsg').textContent = h.simRunning ? 'Close MSFS to reinstall: it loads Community add-ons only when it starts.' : h.busy ? 'Reinstallingâ€¦' : '';
+  $('hookMsg').className = 'hint' + (h.simRunning ? ' warn' : '');
+}
+$('hookDir').oninput = () => { hookDirTouched = true; };
+$('btnHookRefresh').onclick = () => { hookDirTouched = false; loadHookStatus(); };
+$('btnHookReinstall').onclick = async () => {
+  hookReinstalling = true;
+  $('btnHookReinstall').disabled = true;
+  $('hookMsg').className = 'hint';
+  $('hookMsg').textContent = "Rebuilding the hook from your sim's files and installing itâ€¦";
+  $('hookOut').textContent = '';
+  try {
+    const r = await fetch('/api/hook-setup/reinstall', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ community: $('hookDir').value.trim() }) });
+    const j = await r.json();
+    $('hookOut').textContent = j.output || '';
+    $('hookMsg').textContent = j.ok ? 'Installed. Start MSFS (or restart it) to load it.' : j.error || 'The hook is not installed: see below.';
+    $('hookMsg').className = 'hint' + (j.ok ? '' : ' warn');
+  } catch (e) {
+    $('hookMsg').textContent = e.message;
+  }
+  hookReinstalling = false;
+  hookDirTouched = false;
+  loadHookStatus();
+};
+
 // ---- tabs ----
 function setTab(tab) {
   document.body.dataset.tab = tab;
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === tab);
-  history.replaceState(null, '', tab === 'screens' ? '#screens' : location.pathname + location.search);
+  history.replaceState(null, '', tab === 'layouts' ? location.pathname + location.search : `#${tab}`);
   if (tab === 'screens') renderScreens(true);
-  else renderStage();
+  else if (tab === 'layouts') renderStage();
+  clearInterval(hookTimer);
+  if (tab === 'addon') { loadHookStatus(); hookTimer = setInterval(() => { if (!document.hidden) loadHookStatus(); }, 5000); }
   updateAppsSub();
   updateSubs();
 }
@@ -1262,8 +1357,8 @@ function updateLive() {
 // ---- keyboard ----
 window.addEventListener('keydown', (e) => {
   if ($('preview').classList.contains('open')) return;
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (document.body.dataset.tab === 'screens') { if (screensDirty) $('btnScreens').click(); } else save(); return; }
-  if (document.body.dataset.tab === 'screens') return;
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (document.body.dataset.tab === 'screens') { if (screensDirty) $('btnScreens').click(); } else if (document.body.dataset.tab === 'layouts') save(); return; }
+  if (document.body.dataset.tab !== 'layouts') return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
   const g = draft?.gauges.find((x) => x.id === selId);
   if (!g) return;
@@ -1284,7 +1379,7 @@ window.addEventListener('beforeunload', (e) => { if (dirty || screensDirty) { e.
 let saved = 'demo';
 try { saved = localStorage.getItem('clEditorData') || 'demo'; } catch {}
 setDataMode(saved === 'live' ? 'live' : 'demo');
-setTab(location.hash === '#screens' ? 'screens' : 'layouts');
+setTab({ '#screens': 'screens', '#addon': 'addon' }[location.hash] || 'layouts');
 connect();
 // A hidden tab (minimised, another tab in front) costs the sim nothing: previews and the catalog's
 // picture grabs stop, and start again when the tab is shown.

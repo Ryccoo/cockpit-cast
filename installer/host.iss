@@ -174,6 +174,161 @@ begin
     RenameFile(Dll, Dll + '.' + GetDateTimeString('yyyymmddhhnnss', #0, #0) + '.old');
 end;
 
+// ---- Community folder page: where the hook goes ----
+// Shown whenever the hook task is ticked (not in silent updates, which use the remembered folder), filled
+// in with the folder found in the same order as hook\install-hook.mjs: the folder chosen last time, the
+// Community folder set in MSFS Addons Linker, the sim's packages folder (UserCfg.opt, Steam or MS Store),
+// the default locations. Addons Linker keeps add-ons in its own library and links the enabled ones into
+// the sim's real Community folder: the hook goes there, never into the library.
+var
+  CommunityPage: TInputDirWizardPage;
+
+// %LOCALAPPDATA%\CockpitCast\hook.json: { "community": "C:\\...\\Community" }
+function SavedCommunity: String;
+var
+  S: AnsiString;
+  T: String;
+  I: Integer;
+begin
+  Result := '';
+  if not LoadStringFromFile(ExpandConstant('{localappdata}\CockpitCast\hook.json'), S) then
+    Exit;
+  T := String(S);
+  I := Pos('"community"', T);
+  if I = 0 then
+    Exit;
+  T := Copy(T, I + 11, MaxInt);
+  I := Pos('"', T);
+  if I = 0 then
+    Exit;
+  T := Copy(T, I + 1, MaxInt);
+  I := Pos('"', T);
+  if I = 0 then
+    Exit;
+  Result := Copy(T, 1, I - 1);
+  StringChangeEx(Result, '\\', '\', True);
+end;
+
+// A setting in MSFS Addons Linker's .ini files (C:\ProgramData\MSFS Addons Linker*) whose value is an
+// existing folder named Community or Community2024 (its key names are not documented).
+function AddonsLinkerCommunity: String;
+var
+  DirRec, IniRec: TFindRec;
+  Base, Dir, V, L: String;
+  Lines: TArrayOfString;
+  I, Eq: Integer;
+begin
+  Result := '';
+  Base := ExpandConstant('{commonappdata}');
+  if not FindFirst(Base + '\MSFS Addons Linker*', DirRec) then
+    Exit;
+  try
+    repeat
+      if (DirRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then
+        Continue;
+      Dir := Base + '\' + DirRec.Name;
+      if FindFirst(Dir + '\*.ini', IniRec) then
+      try
+        repeat
+          if LoadStringsFromFile(Dir + '\' + IniRec.Name, Lines) then
+            for I := 0 to GetArrayLength(Lines) - 1 do
+            begin
+              Eq := Pos('=', Lines[I]);
+              if Eq < 2 then
+                Continue;
+              V := Trim(Copy(Lines[I], Eq + 1, MaxInt));
+              StringChangeEx(V, '"', '', True);
+              L := Lowercase(RemoveBackslashUnlessRoot(V));
+              if ((Copy(L, Length(L) - 9, 10) = '\community') or (Copy(L, Length(L) - 13, 14) = '\community2024')) and DirExists(V) then
+              begin
+                Result := RemoveBackslashUnlessRoot(V);
+                Exit;
+              end;
+            end;
+        until not FindNext(IniRec);
+      finally
+        FindClose(IniRec);
+      end;
+    until not FindNext(DirRec);
+  finally
+    FindClose(DirRec);
+  end;
+end;
+
+// InstalledPackagesPath "D:\MSFS" in UserCfg.opt -> D:\MSFS\Community
+function UserCfgCommunity(const F: String): String;
+var
+  Lines: TArrayOfString;
+  I, Q: Integer;
+  L: String;
+begin
+  Result := '';
+  if not LoadStringsFromFile(F, Lines) then
+    Exit;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    L := Trim(Lines[I]);
+    if Pos('InstalledPackagesPath', L) <> 1 then
+      Continue;
+    Q := Pos('"', L);
+    if Q = 0 then
+      Exit;
+    L := Copy(L, Q + 1, MaxInt);
+    Q := Pos('"', L);
+    if Q = 0 then
+      Exit;
+    Result := AddBackslash(Copy(L, 1, Q - 1)) + 'Community';
+    Exit;
+  end;
+end;
+
+function DetectCommunity: String;
+var
+  C: array[0..5] of String;
+  I: Integer;
+begin
+  C[0] := SavedCommunity;
+  C[1] := AddonsLinkerCommunity;
+  C[2] := UserCfgCommunity(ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\UserCfg.opt'));
+  C[3] := UserCfgCommunity(ExpandConstant('{localappdata}\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\UserCfg.opt'));
+  C[4] := ExpandConstant('{userappdata}\Microsoft Flight Simulator 2024\Packages\Community');
+  C[5] := ExpandConstant('{localappdata}\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\Packages\Community');
+  Result := '';
+  for I := 0 to 5 do
+    if (C[I] <> '') and DirExists(C[I]) then
+    begin
+      Result := C[I];
+      Exit;
+    end;
+end;
+
+procedure InitializeWizard;
+begin
+  CommunityPage := CreateInputDirPage(wpSelectTasks, 'MSFS Community folder', 'Where should the CockpitCast hook go?',
+    'The hook is a small add-on for MSFS 2024. It goes into the folder MSFS loads add-ons from: its Community folder. ' +
+    'Setup filled in the folder it found; check it, or choose another.' + #13#10#13#10 +
+    'Using MSFS Addons Linker, or keeping add-ons on another drive? Choose the Community folder set in its options ' +
+    '(where it puts the links), not your add-ons library: MSFS does not read the library.',
+    False, '');
+  CommunityPage.Add('Community folder:');
+  CommunityPage.Values[0] := DetectCommunity;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = CommunityPage.ID) and not WizardIsTaskSelected('hook');
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = CommunityPage.ID) and ((Trim(CommunityPage.Values[0]) = '') or not DirExists(CommunityPage.Values[0])) then
+  begin
+    MsgBox('That folder does not exist. Choose the Community folder MSFS 2024 loads add-ons from.', mbError, MB_OK);
+    Result := False;
+  end;
+end;
+
 // Runs hook\setup-hook.mjs with Extra arguments; its exit code (-1 if it could not start).
 function SetupHook(const Extra: String): Integer;
 begin
@@ -192,10 +347,20 @@ begin
   if (CurStep = ssPostInstall) and WizardIsTaskSelected('hook') then
   begin
     WizardForm.StatusLabel.Caption := 'Installing the Community hook into MSFS 2024...';
-    Code := SetupHook('');
-    // 3: no Community folder found (moved add-ons, Addons Linker, ...). Ask for it; the hook remembers
-    // the answer, so later repairs and updates use it too. Also during CockpitCast's own (silent)
-    // updates: someone clicked Install update, so they are at this PC.
+    // The folder from the Community folder page (remembered by the hook). Silent updates skip the page
+    // and use the remembered folder.
+    Dir := '';
+    if not WizardSilent then
+      Dir := RemoveBackslashUnlessRoot(Trim(CommunityPage.Values[0]));
+    // A trailing backslash would escape the closing quote ("E:" as a drive root).
+    if (Dir <> '') and (Dir[Length(Dir)] = '') then
+      Dir := Dir + '.';
+    if Dir <> '' then
+      Code := SetupHook(' --community "' + Dir + '"')
+    else
+      Code := SetupHook('');
+    // 3: no Community folder found (a silent update, and the folder is gone). Ask for it; the hook
+    // remembers the answer. Also during CockpitCast's own updates: someone clicked Install update.
     Dir := '';
     while (Code = 3) and
           BrowseForFolder('MSFS 2024''s Community folder was not found. Choose the Community folder the sim ' +
