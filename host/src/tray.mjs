@@ -66,6 +66,7 @@ export class Tray extends EventEmitter {
     this.write(`monitor ${base}/`);
     if (this.supportUrl) this.write(`support ${this.supportUrl}`);
     if (this.updateVersion) this.write(`update ${this.updateVersion}`);
+    if (this.localState) this.write(`local ${this.localState}`);
     this.update();
     this.timer = setInterval(() => this.update(), 2000);
   }
@@ -77,6 +78,8 @@ export class Tray extends EventEmitter {
     } else if (line === 'update') {
       log.info('update from the tray menu');
       this.emit('update');
+    } else if (line === 'local-toggle') {
+      this.emit('local-toggle');
     }
   }
 
@@ -85,6 +88,13 @@ export class Tray extends EventEmitter {
     if (version === this.updateVersion) return;
     this.updateVersion = version;
     if (version) this.write(`update ${version}`);
+  }
+
+  /// Local screens: 'none' (menu item hidden), 'on' or 'off' (ticked or not).
+  setLocal(state) {
+    if (state === this.localState) return;
+    this.localState = state;
+    this.write(`local ${state}`);
   }
 
   /// Launcher mode: the tray stops the host, runs this installer (silent update) and exits.
@@ -119,6 +129,7 @@ export class Tray extends EventEmitter {
     this.write(`monitor ${base}/`);
     if (this.supportUrl) this.write(`support ${this.supportUrl}`);
     if (this.updateVersion) this.write(`update ${this.updateVersion}`);
+    if (this.localState) this.write(`local ${this.localState}`);
     this.update();
   }
 

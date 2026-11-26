@@ -35,7 +35,7 @@ constexpr UINT WM_HOSTGONE = WM_APP + 3;  // the host's output closed (it exited
 constexpr UINT_PTR TIMER_RESTART = 1, TIMER_KILL = 2;
 constexpr int MAX_RESTARTS = 3;
 constexpr UINT ICON_ID = 1;
-constexpr UINT CMD_EDITOR = 1, CMD_MONITOR = 2, CMD_QUIT = 3, CMD_SUPPORT = 4, CMD_UPDATE = 5, CMD_LOGS = 6;
+constexpr UINT CMD_EDITOR = 1, CMD_MONITOR = 2, CMD_QUIT = 3, CMD_SUPPORT = 4, CMD_UPDATE = 5, CMD_LOGS = 6, CMD_LOCAL = 7;
 
 HWND g_wnd = nullptr;
 UINT g_taskbarCreated = 0;
@@ -43,6 +43,7 @@ HICON g_icon = nullptr;
 std::wstring g_editor = L"http://localhost:8800/editor";
 std::wstring g_monitor = L"http://localhost:8800/";
 std::wstring g_support;  // donation page, from the host
+std::wstring g_local;     // local screens: L"none" (no menu item), L"on" or L"off"
 std::wstring g_update;   // newer version that can be installed, from the host
 std::wstring g_installer;  // set by "install": run it once the host has stopped
 HANDLE g_single = nullptr; // the single-instance mutex (the installer checks it)
@@ -173,6 +174,8 @@ void ShowMenu(int x, int y) {
   AppendMenuW(m, MF_STRING, CMD_EDITOR, L"Open layout editor");
   AppendMenuW(m, MF_STRING, CMD_MONITOR, L"Open monitor");
   AppendMenuW(m, MF_STRING, CMD_LOGS, L"Open logs folder");
+  if (g_local == L"on" || g_local == L"off")
+    AppendMenuW(m, MF_STRING | (g_local == L"on" ? MF_CHECKED : MF_UNCHECKED), CMD_LOCAL, L"Show local screens");
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
   for (const auto& line : Lines(g_status)) AppendMenuW(m, MF_STRING | MF_GRAYED, 0, line.c_str());
   AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
@@ -187,6 +190,7 @@ void ShowMenu(int x, int y) {
   else if (cmd == CMD_MONITOR) Open(g_monitor);
   else if (cmd == CMD_SUPPORT) Open(g_support);
   else if (cmd == CMD_LOGS) OpenLogs();
+  else if (cmd == CMD_LOCAL) SendToHost("local-toggle\n");
   else if (cmd == CMD_UPDATE) {
     SendToHost("update\n");
     Notify(L"CockpitCast", L"Downloading the update. CockpitCast restarts by itself when it is installed.", NIIF_INFO);
@@ -207,6 +211,7 @@ void OnLine(const std::wstring& line) {
   if (cmd == L"editor" && !rest.empty()) g_editor = rest;
   else if (cmd == L"monitor" && !rest.empty()) g_monitor = rest;
   else if (cmd == L"support" && rest.rfind(L"https://", 0) == 0) g_support = rest;
+  else if (cmd == L"local") g_local = rest;
   else if (cmd == L"update" && !rest.empty() && rest.size() < 32) {
     if (rest != g_update) Notify(L"CockpitCast update", L"Version " + rest + L" is available. Right-click the CockpitCast icon to install it.", NIIF_INFO);
     g_update = rest;

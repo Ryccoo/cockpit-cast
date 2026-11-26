@@ -6,10 +6,15 @@
 //
 // The viewer is started with the host (Windows, when built or installed) and reports the monitors; the
 // editor's Screens tab offers them. It is restarted if it exits, and ends when the host ends.
+//
+// On/off for all local screens at once (tray menu "Show local screens", the editor's Screens tab), so the
+// screens' monitors and areas stay set: off closes the windows and stops the local copies in capture.dll.
+// Remembered in <dataDir>/local-screens.json.
 
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
+import path from 'node:path';
 import readline from 'node:readline';
 import { makeLog } from './log.mjs';
 
@@ -26,7 +31,31 @@ export class LocalScreens extends EventEmitter {
     this.proc = null;
     this.last = '';
     this.closing = false;
+    this.file = path.join(cfg.dataDir, 'local-screens.json');
+    this.enabled = true;
+    try {
+      this.enabled = JSON.parse(fs.readFileSync(this.file, 'utf8')).enabled !== false;
+    } catch {}
+    this.lastState = '';
     screens.on('change', () => this.update());
+  }
+
+  /// 'none' (no screen set to "On this PC"), 'on' or 'off'.
+  state() {
+    const configured = this.screens.list().some((s) => s.local && Number.isInteger(s.local.monitor));
+    return !configured ? 'none' : this.enabled ? 'on' : 'off';
+  }
+
+  setEnabled(on) {
+    this.enabled = !!on;
+    try {
+      fs.mkdirSync(path.dirname(this.file), { recursive: true });
+      fs.writeFileSync(this.file, JSON.stringify({ enabled: this.enabled }, null, 2) + '\n');
+    } catch (e) {
+      log.warn(`cannot save ${this.file}: ${e.message}`);
+    }
+    log.info(`local screens ${this.enabled ? 'on' : 'off'}`);
+    this.update();
   }
 
   start() {
@@ -86,7 +115,12 @@ export class LocalScreens extends EventEmitter {
   }
 
   update() {
-    const windows = this.windows();
+    const windows = this.enabled ? this.windows() : [];
+    const state = this.state();
+    if (state !== this.lastState) {
+      this.lastState = state;
+      this.emit('state', state);
+    }
     const local = new Map();
     for (const w of windows) if (w.display) local.set(w.display, this.cfg.localFps);
     this.captureConfig.setLocal(local);
@@ -99,7 +133,7 @@ export class LocalScreens extends EventEmitter {
   }
 
   status() {
-    return { running: !!this.proc, monitors: this.monitors, stats: this.stats };
+    return { running: !!this.proc, enabled: this.enabled, state: this.state(), monitors: this.monitors, stats: this.stats };
   }
 
   close() {

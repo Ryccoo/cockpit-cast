@@ -203,6 +203,7 @@
     <span id="screensDirty" class="dirty"></span>
     <span id="screensMsg" class="hint"></span>
     <span class="grow"></span>
+    <button id="btnLocal" style="display:none" title="Show or hide all screens set to &quot;On this PC&quot; at once; their monitors and areas stay set">Local screens: on</button>
     <button id="btnAddScreen">Add screen</button>
     <select id="addAircraft" title="Give another aircraft its own choices"></select>
   </div>
@@ -539,7 +540,7 @@ function connect() {
     if (m.type === 'layouts') onLayouts(m.layouts);
     else if (m.type === 'screens') {
       screens = m.screens;
-      if ('perAircraft' in m) { perAircraft = m.perAircraft || {}; knownAircraft = m.knownAircraft || []; loadedAircraft = m.aircraft || null; aircraftNames = m.aircraftNames || {}; localMonitors = m.localMonitors || []; }
+      if ('perAircraft' in m) { perAircraft = m.perAircraft || {}; knownAircraft = m.knownAircraft || []; loadedAircraft = m.aircraft || null; aircraftNames = m.aircraftNames || {}; localMonitors = m.localMonitors || []; localState = m.localState || 'none'; }
       if (!screensDirty) { screensDraft = null; aircraftDraft = null; }
       renderScreens();
       renderLayouts();
@@ -662,6 +663,7 @@ function armButton(btn, armedText, action) {
 let screensDraft = null, screensDirty = false;
 let perAircraft = {}, aircraftDraft = null, knownAircraft = [], loadedAircraft = null, aircraftNames = {};
 let localMonitors = [];      // monitors of this PC, for "On this PC" (the host's local screen viewer)
+let localState = 'none';     // all local screens: 'none' (none set up), 'on' or 'off'
 let extraCols = [];          // aircraft columns added on this page that have no choices yet
 let previewAircraft = '';    // whose choices the preview shows ('' = all aircraft)
 let apps = null;             // connected display apps (host 'apps' message, while this tab is shown)
@@ -796,8 +798,12 @@ function localControls(d, i) {
     + (d.local ? `<label class="f local" title="Part of the monitor: two screens can share one (left and right half)">Area <select data-i="${i}" data-local="area">${areas}</select></label>` : '');
 }
 
-// Toolbar: save state, and the aircraft that can get a column.
+// Toolbar: save state, local screens on/off, and the aircraft that can get a column.
 function renderScreensToolbar() {
+  const lb = $('btnLocal');
+  lb.style.display = localState === 'none' ? 'none' : '';
+  lb.textContent = localState === 'on' ? 'Local screens: on' : 'Local screens: off';
+  lb.className = localState === 'on' ? 'primary' : '';
   $('btnScreens').disabled = !screensDirty;
   $('btnScreensRevert').disabled = !screensDirty;
   $('screensDirty').textContent = screensDirty ? 'Unsaved changes' : '';
@@ -808,6 +814,7 @@ function renderScreensToolbar() {
     + rest.map((a) => `<option value="${esc(a)}">${esc(acName(a) !== a ? `${acName(a)} (${a})` : a)}</option>`).join('');
   $('addAircraft').disabled = !rest.length;
 }
+$('btnLocal').onclick = () => send({ type: 'setLocalScreens', on: localState !== 'on' });
 $('addAircraft').onchange = () => { const a = $('addAircraft').value; if (a && !extraCols.includes(a)) extraCols.push(a); renderScreens(true); };
 
 // What a screen shows in the preview: the chosen aircraft's own choice, else its layout.

@@ -51,6 +51,7 @@ const screens = new Screens({ cfg, sim, hook, registry, instruments });
 // Screens set to "On this PC": borderless windows of the local screen viewer, fed straight from the GPU.
 const localScreens = new LocalScreens({ cfg, screens, captureConfig });
 screens.localMonitors = () => localScreens.monitors;
+screens.localState = () => localScreens.state();
 // For the editor's Insert window: displays by aircraft, with a saved picture of each.
 const catalog = new DisplayCatalog({ registry, instruments, hook, sim, hub, dataDir: cfg.dataDir });
 registry.on('change', () => {
@@ -112,6 +113,7 @@ const clients = new ClientServer({
   onDataWanted: (w) => dataSource.setDataWanted(w),
   onInstallUpdate: () => installUpdate(),
   onSetUpdateBeta: (on) => updater.setBeta(on),
+  onSetLocalScreens: (on) => localScreens.setEnabled(on),
 });
 let latestGauge = null;
 dataSource.on('data', (values) => {
@@ -121,6 +123,7 @@ dataSource.on('data', (values) => {
 layouts.on('change', (l) => clients.broadcastLayouts(l));
 screens.on('change', (s) => clients.broadcastScreens(s));
 localScreens.on('monitors', () => clients.broadcastScreens(screens.list()));
+localScreens.on('state', () => clients.broadcastScreens(screens.list()));
 clients.addUpgrade('/hook', hook.wss);
 clients.addApi('GET', '/api/instruments', () => instruments.report());
 clients.addApi('GET', '/api/displays', () => ({ displays: registry.all(), present: [...hook.present()] }));
@@ -233,6 +236,9 @@ const tray = new Tray({
   },
 });
 tray.on('quit', shutdown);
+tray.on('local-toggle', () => localScreens.setEnabled(!localScreens.enabled));
+localScreens.on('state', (s) => tray.setLocal(s));
+tray.setLocal(localScreens.state());
 tray.on('update', () => installUpdate().catch((e) => log.warn(`update failed: ${e.message}`)));
 if (cfg.tray || Tray.parented) tray.start();
 updater.start();

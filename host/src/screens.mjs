@@ -155,7 +155,7 @@ export class Screens extends EventEmitter {
     for (const name of Object.keys(this.instruments?.byAircraft ?? {})) known.add(name);
     for (const d of this.registry.all()) for (const name of d.aircraft ?? []) known.add(name);
     if (aircraft) known.add(aircraft);
-    return { aircraft, perAircraft: this.perAircraft, knownAircraft: [...known].sort(), aircraftNames: this.names, localMonitors: this.localMonitors?.() ?? [] };
+    return { aircraft, perAircraft: this.perAircraft, knownAircraft: [...known].sort(), aircraftNames: this.names, localMonitors: this.localMonitors?.() ?? [], localState: this.localState?.() ?? 'none' };
   }
 
   /// Replace the screen list (from the editor): any number of screens, each with an id (what a client

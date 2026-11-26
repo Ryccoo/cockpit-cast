@@ -16,7 +16,7 @@ const MAX_BUFFERED = 1024 * 1024;
 const PAGES = { '/': 'monitor.html', '/monitor.html': 'monitor.html', '/editor': 'editor.html', '/editor.html': 'editor.html', '/update-banner.js': 'update-banner.js' }; // skip frames for a client with more than this unsent
 
 export class ClientServer {
-  constructor({ port, hub, getStatus, getDetail = () => ({}), onWanted = () => {}, onDataWanted = () => {}, onInstallUpdate = null, onSetUpdateBeta = null, layouts = null, screens = null, catalog = null, maxDataHz = 60, version, dataDir = null }) {
+  constructor({ port, hub, getStatus, getDetail = () => ({}), onWanted = () => {}, onDataWanted = () => {}, onInstallUpdate = null, onSetUpdateBeta = null, onSetLocalScreens = null, layouts = null, screens = null, catalog = null, maxDataHz = 60, version, dataDir = null }) {
     // Paused apps (by device and window): they get nothing, so nothing is captured for them. Kept on disk.
     this.pausedFile = dataDir ? path.join(dataDir, 'paused-apps.json') : null;
     this.paused = new Set();
@@ -26,6 +26,7 @@ export class ClientServer {
     this.appsTimer = setInterval(() => this.sendApps(), 2000);
     this.onInstallUpdate = onInstallUpdate;
     this.onSetUpdateBeta = onSetUpdateBeta;
+    this.onSetLocalScreens = onSetLocalScreens;
     this.layouts = layouts;
     this.catalog = catalog;
     this.screens = screens;
@@ -275,6 +276,9 @@ export class ClientServer {
       case 'installUpdate': // the update banner in the editor or monitor; pages on this PC only
         if (!isLoopback(c.addr)) this.send(c, { type: 'error', message: 'updates can be installed only from the sim PC' });
         else if (this.onInstallUpdate) this.onInstallUpdate().catch((e) => this.send(c, { type: 'error', message: `update failed: ${e.message}` }));
+        break;
+      case 'setLocalScreens': // the editor's "Local screens" on/off (Screens tab)
+        this.onSetLocalScreens?.(!!msg.on);
         break;
       case 'setUpdateBeta': // the monitor's "beta versions" switch; pages on this PC only
         if (!isLoopback(c.addr)) this.send(c, { type: 'error', message: 'beta versions can be switched only on the sim PC' });
