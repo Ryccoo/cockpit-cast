@@ -68,17 +68,18 @@ Name: startup; Description: "Start CockpitCast when I sign in to Windows"; Flags
 Source: "stage\host\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\CockpitCast"; Filename: "{app}\cockpitcast.exe"; Comment: "Start the host (tray icon). If it already runs: open the layout editor."
+Name: "{group}\CockpitCast"; Filename: "{app}\cockpitcast.exe"; Comment: "Start CockpitCast (tray icon and its window). If it already runs: show its window."
 Name: "{group}\Repair Community hook"; Filename: "{app}\node\node.exe"; Parameters: """{app}\hook\setup-hook.mjs"" --pause"; WorkingDir: "{app}"; Comment: "Rebuild and reinstall the hook (after every MSFS update)"
 Name: "{group}\Uninstall CockpitCast"; Filename: "{uninstallexe}"
-Name: "{userstartup}\CockpitCast"; Filename: "{app}\cockpitcast.exe"; Tasks: startup
+; --background: at sign-in only the tray icon, no window.
+Name: "{userstartup}\CockpitCast"; Filename: "{app}\cockpitcast.exe"; Parameters: "--background"; Tasks: startup
 
 [Run]
 ; runasoriginaluser: even if setup was started "as administrator", CockpitCast runs as the normal user
 ; (an elevated CockpitCast can be refused the MS Store sim's Community folder).
 Filename: "{app}\cockpitcast.exe"; Description: "Start CockpitCast now"; Flags: postinstall nowait skipifsilent runasoriginaluser
 ; Updates from CockpitCast itself (/SILENT /UPDATE=1; host/src/updater.mjs): start it again when done.
-Filename: "{app}\cockpitcast.exe"; Flags: nowait runasoriginaluser; Check: IsUpdate
+Filename: "{app}\cockpitcast.exe"; Parameters: "--background"; Flags: nowait runasoriginaluser; Check: IsUpdate
 
 [UninstallRun]
 Filename: "{app}\node\node.exe"; Parameters: """{app}\hook\install-hook.mjs"" --remove"; WorkingDir: "{app}"; Flags: runhidden; RunOnceId: "RemoveHook"

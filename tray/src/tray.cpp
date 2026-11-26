@@ -51,6 +51,9 @@ std::wstring g_update;   // newer version that can be installed, from the host
 std::wstring g_installer;  // set by "install": run it once the host has stopped
 HANDLE g_single = nullptr; // the single-instance mutex (the installer checks it)
 std::wstring g_level = L"idle";
+// Started by the user (not with --background, as the sign-in shortcut and updates do): show the app
+// window once the host is up (its first "editor" line: the host sends it after its server listens).
+bool g_openOnStart = false;
 std::wstring g_status = L"CockpitCast host";
 
 // The host's channel: our stdin/stdout when the host started us; pipes to the node process in launcher mode.
@@ -398,7 +401,13 @@ void ShowMenu(int x, int y) {
 void OnLine(const std::wstring& line) {
   size_t sp = line.find(L' ');
   std::wstring cmd = line.substr(0, sp), rest = sp == std::wstring::npos ? L"" : line.substr(sp + 1);
-  if (cmd == L"editor" && !rest.empty()) g_editor = rest;
+  if (cmd == L"editor" && !rest.empty()) {
+    g_editor = rest;
+    if (g_openOnStart) {
+      g_openOnStart = false;
+      ShowApp(g_editor);
+    }
+  }
   else if (cmd == L"monitor" && !rest.empty()) g_monitor = rest;
   else if (cmd == L"support" && rest.rfind(L"https://", 0) == 0) g_support = rest;
   else if (cmd == L"local") g_local = rest;
@@ -612,7 +621,8 @@ bool StartHost() {
 
 }  // namespace
 
-int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
+int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int) {
+  const bool background = cmdLine && wcsstr(cmdLine, L"--background");
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   // Started by the host (its pipe on our stdin), or by itself (launcher).
   HANDLE stdIn = GetStdHandle(STD_INPUT_HANDLE);
@@ -620,6 +630,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
   if (g_launcher) {
     g_single = CreateMutexW(nullptr, TRUE, L"Local\\CockpitCastTray");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {  // already running: it shows its editor window
+      if (background) return 0;  // e.g. the sign-in shortcut while it already runs: nothing to show
       HWND first = FindWindowW(L"CockpitCastTray", nullptr);
       if (first) {
         DWORD pid = 0;
@@ -656,6 +667,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
   g_icon = MakeIcon(g_level);
   AddIcon();
   if (g_launcher) {
+    g_openOnStart = !background;
     if (!StartHost()) {
       std::wstring msg = L"CockpitCast: could not start the host (" + g_node + L").";
       MessageBoxW(nullptr, msg.c_str(), L"CockpitCast", MB_ICONERROR);
