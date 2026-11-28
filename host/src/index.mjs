@@ -196,6 +196,13 @@ clients.addApi('POST', '/api/capture/shutdown', () => {
   return { ok: true };
 });
 hook.on('layouts', (l) => captureConfig.setLayouts(l));
+// SPIKE (branch spike-h-events, not for release): press cockpit buttons through the hook, for
+// host/tools/spike-h-events.mjs. Off unless the host is started with COCKPITCAST_SPIKE=1; local only.
+if (process.env.COCKPITCAST_SPIKE === '1') {
+  log.info('SPIKE: H-event test API is on (COCKPITCAST_SPIKE=1)');
+  clients.addApi('POST', '/api/spike/h-event', async (req) => ({ pages: hook.sendHEvent((await readJson(req)).name) }));
+  clients.addApi('GET', '/api/spike/h-events', () => ({ results: hook.hEvents }));
+}
 
 function readJson(req) {
   return new Promise((resolve, reject) => {

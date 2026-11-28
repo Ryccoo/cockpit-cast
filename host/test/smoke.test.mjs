@@ -101,6 +101,8 @@ test('APIs answer on this PC', async () => {
   assert.ok(tr.setupHook.endsWith('setup-hook.mjs'));
   const st2 = await (await fetch(`${base}/api/startup`)).json();
   assert.ok('on' in st2);
+  // SPIKE: the H-event test API exists only with COCKPITCAST_SPIKE=1 (spike-h-events.test.mjs).
+  assert.equal((await fetch(`${base}/api/spike/h-events`)).status, 404);
   const hs = await (await fetch(`${base}/api/hook-setup`)).json();
   assert.equal(hs.community, null); // a scratch PC: no Community folder anywhere
 });

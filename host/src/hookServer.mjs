@@ -12,6 +12,7 @@ import { makeLog } from './log.mjs';
 
 const log = makeLog('hook');
 const KEY = /^[a-z0-9_.:-]{1,80}(#\d{1,2})?$/;
+const H_NAME = /^[A-Za-z0-9_:.#-]{1,80}$/; // SPIKE: cockpit H-event names, no RPN
 
 export class HookServer extends EventEmitter {
   constructor({ registry }) {
@@ -19,6 +20,7 @@ export class HookServer extends EventEmitter {
     this.registry = registry;
     this.pages = new Set(); // { ws, name, displays: Map(id -> layout) }
     this.layouts = new Map(); // id -> latest layout from any page (kept after the page goes away)
+    this.hEvents = []; // SPIKE: what pages reported after an H-event, newest last
     this.wss = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: 256 * 1024 });
     this.wss.on('connection', (ws, req) => this.onPage(ws, req));
     registry.on('change', () => this.sendTable());
@@ -44,6 +46,7 @@ export class HookServer extends EventEmitter {
         this.emit('status');
       } else if (msg.type === 'layout') this.onLayout(page, msg);
       else if (msg.type === 'instruments') this.onInstruments(msg);
+      else if (msg.type === 'hEventDone') this.onHEventDone(page, msg);
     });
     ws.on('close', () => {
       this.pages.delete(page);
@@ -102,6 +105,31 @@ export class HookServer extends EventEmitter {
     });
     const texture = msg.texture ? { w: int(msg.texture.w), h: int(msg.texture.h) } : null;
     this.emit('instruments', { page: str(msg.page, 200), texture, instruments: list });
+  }
+
+  // SPIKE (branch spike-h-events, not for release): send an H-event to every connected page, which hands
+  // it to its instruments like a press in the cockpit. Only reachable when the host runs with
+  // COCKPITCAST_SPIKE=1 (index.mjs). Returns how many pages it went to.
+  sendHEvent(name) {
+    if (typeof name !== 'string' || !H_NAME.test(name)) throw new Error('bad event name');
+    const msg = JSON.stringify({ type: 'hEvent', name });
+    let n = 0;
+    for (const p of this.pages) {
+      try {
+        p.ws.send(msg);
+        n++;
+      } catch {}
+    }
+    log.info(`spike: H-event ${name} sent to ${n} page(s)`);
+    return n;
+  }
+
+  onHEventDone(page, msg) {
+    const list = (v) => (Array.isArray(v) ? v.slice(0, 32).map((s) => String(s).slice(0, 200)) : []);
+    const done = { at: Date.now(), name: String(msg.name ?? '').slice(0, 80), page: String(msg.page ?? '').slice(0, 200), called: list(msg.called), failed: list(msg.failed) };
+    this.hEvents.push(done);
+    if (this.hEvents.length > 200) this.hEvents.shift();
+    log.info(`spike: ${done.name} on ${done.page}: called ${done.called.join(', ') || 'none'}${done.failed.length ? `; failed ${done.failed.join('; ')}` : ''}`);
   }
 
   /// Displays held by connected pages right now (the cockpit that is loaded).

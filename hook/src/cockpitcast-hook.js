@@ -143,6 +143,8 @@
         if (msg && msg.type === 'displays' && msg.table && typeof msg.table === 'object') {
           DISPLAYS = msg.table;
           items = null; // match the instruments against the new table on the next tick
+        } else if (msg && msg.type === 'hEvent') {
+          hEvent(msg.name);
         }
       };
       s.onclose = s.onerror = function () { wsOpen = false; if (ws === s) ws = null; };
@@ -150,6 +152,27 @@
   }
   function sendText(text) {
     try { ws.send(text); } catch (e) {}
+  }
+
+  // SPIKE (branch spike-h-events, not for release): press a cockpit button by its H-event name, the way
+  // the sim's VCockpit.js does on "OnInteractionEvent": every instrument under #panel gets
+  // onInteractionEvent([name]) unless its url says noEvent. Each call is guarded, so one failing
+  // instrument never breaks another. The page reports what it did.
+  var H_NAME = /^[A-Za-z0-9_:.#-]{1,80}$/;
+  function hEvent(name) {
+    if (typeof name !== 'string' || !H_NAME.test(name)) return;
+    var called = [], failed = [];
+    var panel = document.getElementById('panel');
+    var kids = panel ? panel.children : [];
+    for (var i = 0; i < kids.length; i++) {
+      var inst = kids[i];
+      if (!inst || typeof inst.onInteractionEvent !== 'function') continue;
+      try { if (inst.urlConfig && inst.urlConfig.noEvent) continue; } catch (e) {}
+      var id = inst.tagName.toLowerCase();
+      try { if (typeof inst.instrumentIdentifier === 'string') id = inst.instrumentIdentifier; } catch (e) {}
+      try { inst.onInteractionEvent([name]); called.push(id); } catch (e) { failed.push(id + ': ' + String(e && e.message || e).slice(0, 120)); }
+    }
+    if (wsOpen) sendText(JSON.stringify({ type: 'hEventDone', name: name, page: location.pathname, called: called, failed: failed }));
   }
 
   // ---- once a second ----
